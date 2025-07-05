@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Music } from 'lucide-react';
 
 interface User {
@@ -46,6 +47,7 @@ async function generateCodeChallenge(verifier: string) {
 
 export default function Home({ user, setUser, accessToken }: HomeProps) {
     const [loading, setLoading] = useState(false);
+    const navigate = useNavigate();
 
     const handleLogin = async () => {
         setLoading(true);
@@ -85,65 +87,10 @@ export default function Home({ user, setUser, accessToken }: HomeProps) {
 
         setLoading(true);
         try {
-            // Get top tracks from all time periods
-            const [shortTerm, mediumTerm, longTerm] = await Promise.all([
-                fetch(`https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=20`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                }).then(r => r.json()),
-                fetch(`https://api.spotify.com/v1/me/top/tracks?time_range=medium_term&limit=20`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                }).then(r => r.json()),
-                fetch(`https://api.spotify.com/v1/me/top/tracks?time_range=long_term&limit=20`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                }).then(r => r.json())
-            ]);
-
-            // Combine tracks and dedupe
-            const allTracks = new Set();
-            [...(shortTerm.items || []), ...(mediumTerm.items || []), ...(longTerm.items || [])]
-                .forEach(track => allTracks.add(track.uri));
-
-            const trackUris = Array.from(allTracks) as string[];
-
-            // Create playlist
-            const playlistResponse = await fetch(`https://api.spotify.com/v1/users/${user.id}/playlists`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    name: 'Vibecheck - Ultimate Playlist',
-                    description: 'Your ultimate playlist from top tracks across all time periods',
-                    public: false,
-                }),
-            });
-
-            const playlist = await playlistResponse.json();
-
-            // Add tracks to playlist
-            if (trackUris.length > 0) {
-                await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        uris: trackUris.slice(0, 100) // Spotify limit
-                    }),
-                });
-            }
-
-            // Update user with playlist ID
-            const updatedUser = { ...user, playlistId: playlist.id };
-            setUser(updatedUser);
-            localStorage.setItem('user_data', JSON.stringify(updatedUser));
-
-            // Navigate to profile
-            window.location.href = `/user/${user.id}`;
+            // Navigate to profile immediately, playlist will be created there
+            navigate(`/user/${user.id}`);
         } catch (error) {
-            console.error('Failed to create playlist:', error);
+            console.error('Failed to navigate to profile:', error);
         } finally {
             setLoading(false);
         }
@@ -170,7 +117,7 @@ export default function Home({ user, setUser, accessToken }: HomeProps) {
                         {loading ? (
                             <>
                                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                Creating Playlist...
+                                Loading...
                             </>
                         ) : (
                             <>

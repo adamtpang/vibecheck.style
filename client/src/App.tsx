@@ -187,7 +187,7 @@ export default function App() {
             <div className="min-h-screen bg-background">
                 <Routes>
                     <Route path="/" element={<Home user={user} setUser={setUser} accessToken={accessToken} />} />
-                    <Route path="/user/:userId" element={<UserProfile user={user} accessToken={accessToken} />} />
+                    <Route path="/user/:userId" element={<UserProfile user={user} accessToken={accessToken} setUser={setUser} />} />
                 </Routes>
             </div>
         </Router>
