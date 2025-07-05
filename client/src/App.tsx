@@ -21,75 +21,151 @@ export default function App() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        // Check for existing user data
+        const userData = localStorage.getItem('user_data');
+        const token = localStorage.getItem('access_token');
+
+        if (userData && token) {
+            setUser(JSON.parse(userData));
+            setAccessToken(token);
+        }
+
+        // Check for OAuth callback
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
+        const error = urlParams.get('error');
+
+        console.log('🔍 OAUTH CALLBACK CHECK:');
+        console.log('- Current URL:', window.location.href);
+        console.log('- Has code param:', !!code);
+        console.log('- Has error param:', !!error);
+
+        if (error) {
+            console.error('❌ OAuth error:', error);
+            console.error('- Error description:', urlParams.get('error_description'));
+            setLoading(false);
+            return;
+        }
 
         if (code) {
-            handleCallback(code);
+            console.log('🔄 Processing OAuth code:', code.substring(0, 20) + '...');
+            handleOAuthCallback(code);
         } else {
-            const token = localStorage.getItem('spotify_access_token');
-            if (token) {
-                setAccessToken(token);
-                fetchUserProfile(token);
-            } else {
-                setLoading(false);
-            }
+            setLoading(false);
         }
     }, []);
 
-    const handleCallback = async (code: string) => {
+    const handleOAuthCallback = async (code: string) => {
         try {
             const codeVerifier = localStorage.getItem('code_verifier');
-            if (!codeVerifier) return;
+
+            console.log('🔄 TOKEN EXCHANGE STARTING:');
+            console.log('- Code verifier found:', !!codeVerifier);
+            console.log('- Code verifier length:', codeVerifier?.length);
+            console.log('- Client ID:', CLIENT_ID);
+            console.log('- Redirect URI:', REDIRECT_URI);
+
+            if (!codeVerifier) {
+                console.error('❌ Code verifier not found in localStorage');
+                throw new Error('Code verifier not found');
+            }
+
+            const tokenData = {
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: REDIRECT_URI,
+                client_id: CLIENT_ID,
+                code_verifier: codeVerifier,
+            };
+
+            console.log('📤 TOKEN REQUEST DATA:');
+            console.log('- Grant type:', tokenData.grant_type);
+            console.log('- Code:', tokenData.code.substring(0, 20) + '...');
+            console.log('- Redirect URI:', tokenData.redirect_uri);
+            console.log('- Client ID:', tokenData.client_id);
+            console.log('- Code verifier:', tokenData.code_verifier.substring(0, 20) + '...');
 
             const response = await fetch('https://accounts.spotify.com/api/token', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                body: new URLSearchParams({
-                    grant_type: 'authorization_code',
-                    code,
-                    redirect_uri: REDIRECT_URI,
-                    client_id: CLIENT_ID,
-                    code_verifier: codeVerifier,
-                }),
+                body: new URLSearchParams(tokenData),
             });
 
-            const data = await response.json();
-            if (data.access_token) {
-                localStorage.setItem('spotify_access_token', data.access_token);
-                localStorage.removeItem('code_verifier');
-                setAccessToken(data.access_token);
-                fetchUserProfile(data.access_token);
-                window.history.replaceState({}, document.title, '/');
-            }
-        } catch (error) {
-            console.error('Auth error:', error);
-            setLoading(false);
-        }
-    };
+            console.log('�� TOKEN RESPONSE:');
+            console.log('- Status:', response.status);
+            console.log('- Status text:', response.statusText);
+            console.log('- Headers:', Object.fromEntries(response.headers.entries()));
 
-    const fetchUserProfile = async (token: string) => {
-        try {
-            const response = await fetch('https://api.spotify.com/v1/me', {
+            const data = await response.json();
+
+            console.log('📄 TOKEN RESPONSE DATA:');
+            console.log('- Success:', !!data.access_token);
+            console.log('- Has refresh token:', !!data.refresh_token);
+            console.log('- Token type:', data.token_type);
+            console.log('- Expires in:', data.expires_in);
+            console.log('- Scope:', data.scope);
+
+            if (data.error) {
+                console.error('❌ TOKEN ERROR:', data.error);
+                console.error('- Error description:', data.error_description);
+                throw new Error(data.error_description || data.error);
+            }
+
+            if (!data.access_token) {
+                console.error('❌ No access token received');
+                throw new Error('No access token received');
+            }
+
+            // Store the access token
+            localStorage.setItem('access_token', data.access_token);
+            setAccessToken(data.access_token);
+
+            // Clean up
+            localStorage.removeItem('code_verifier');
+            window.history.replaceState({}, document.title, '/');
+
+            // Get user profile
+            console.log('👤 FETCHING USER PROFILE...');
+            const userResponse = await fetch('https://api.spotify.com/v1/me', {
                 headers: {
-                    'Authorization': `Bearer ${token}`,
+                    'Authorization': `Bearer ${data.access_token}`,
                 },
             });
 
-            if (response.ok) {
-                const profile = await response.json();
-                setUser({
-                    id: profile.id,
-                    display_name: profile.display_name || profile.id,
-                });
-            } else {
-                localStorage.removeItem('spotify_access_token');
+            console.log('📥 USER PROFILE RESPONSE:');
+            console.log('- Status:', userResponse.status);
+            console.log('- Status text:', userResponse.statusText);
+
+            const userData = await userResponse.json();
+
+            console.log('👤 USER DATA:');
+            console.log('- ID:', userData.id);
+            console.log('- Display name:', userData.display_name);
+            console.log('- Country:', userData.country);
+            console.log('- Email:', userData.email);
+
+            if (userData.error) {
+                console.error('❌ USER PROFILE ERROR:', userData.error);
+                throw new Error(userData.error.message || 'Failed to get user profile');
             }
+
+            const user: User = {
+                id: userData.id,
+                display_name: userData.display_name,
+            };
+
+            localStorage.setItem('user_data', JSON.stringify(user));
+            setUser(user);
+
+            console.log('✅ OAuth flow completed successfully');
         } catch (error) {
-            console.error('Failed to fetch profile:', error);
-            localStorage.removeItem('spotify_access_token');
+            console.error('❌ OAuth callback failed:', error);
+            // Clear any partial state
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('user_data');
+            localStorage.removeItem('code_verifier');
         } finally {
             setLoading(false);
         }
@@ -98,17 +174,22 @@ export default function App() {
     if (loading) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading...</p>
+                </div>
             </div>
         );
     }
 
     return (
         <Router>
-            <Routes>
-                <Route path="/" element={<Home user={user} setUser={setUser} accessToken={accessToken} />} />
-                <Route path="/user/:id" element={<UserProfile />} />
-            </Routes>
+            <div className="min-h-screen bg-background">
+                <Routes>
+                    <Route path="/" element={<Home user={user} setUser={setUser} accessToken={accessToken} />} />
+                    <Route path="/user/:userId" element={<UserProfile user={user} accessToken={accessToken} />} />
+                </Routes>
+            </div>
         </Router>
     );
 }// Force redeploy Sat Jul  5 20:37:19 +08 2025

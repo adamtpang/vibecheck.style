@@ -18,6 +18,12 @@ const REDIRECT_URI = window.location.hostname === 'localhost'
     ? 'http://localhost:5173'
     : 'https://vibecheck-phi.vercel.app';
 
+// Debug logging
+console.log('🔍 DEBUG INFO:');
+console.log('- Hostname:', window.location.hostname);
+console.log('- Redirect URI:', REDIRECT_URI);
+console.log('- Client ID:', CLIENT_ID);
+
 // Generate PKCE code verifier and challenge
 function generateCodeVerifier() {
     const array = new Uint8Array(32);
@@ -58,9 +64,18 @@ export default function Home({ user, setUser, accessToken }: HomeProps) {
                 code_challenge: codeChallenge,
             });
 
-            window.location.href = `https://accounts.spotify.com/authorize?${params}`;
+            const authUrl = `https://accounts.spotify.com/authorize?${params}`;
+
+            // Debug logging
+            console.log('🚀 STARTING OAUTH FLOW:');
+            console.log('- Auth URL:', authUrl);
+            console.log('- Redirect URI being sent:', REDIRECT_URI);
+            console.log('- Client ID being sent:', CLIENT_ID);
+            console.log('- Code verifier stored:', codeVerifier.substring(0, 10) + '...');
+
+            window.location.href = authUrl;
         } catch (error) {
-            console.error('Login failed:', error);
+            console.error('❌ Login failed:', error);
             setLoading(false);
         }
     };
