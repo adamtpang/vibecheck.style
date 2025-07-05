@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
 import { Music } from 'lucide-react';
 
 interface User {
-  id: string;
-  display_name: string;
-  playlistId?: string;
+    id: string;
+    display_name: string;
+    playlistId?: string;
 }
 
 export default function UserProfile() {
@@ -15,20 +14,15 @@ export default function UserProfile() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchUser = async () => {
-            if (!id) return;
-
-            try {
-                const response = await axios.get(`/api/user/${id}`);
-                setUser(response.data);
-            } catch (error) {
-                console.error('Error fetching user:', error);
-            } finally {
-                setLoading(false);
+        // Get user data from localStorage
+        const userData = localStorage.getItem('user_data');
+        if (userData) {
+            const parsedUser = JSON.parse(userData);
+            if (parsedUser.id === id) {
+                setUser(parsedUser);
             }
-        };
-
-        fetchUser();
+        }
+        setLoading(false);
     }, [id]);
 
     if (loading) {
