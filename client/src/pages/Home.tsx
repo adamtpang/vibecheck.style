@@ -14,7 +14,9 @@ interface HomeProps {
 }
 
 const CLIENT_ID = 'a7c7a6bd4b9c408294b6e9b78b0bc936';
-const REDIRECT_URI = window.location.origin;
+const REDIRECT_URI = window.location.hostname === 'localhost'
+    ? 'http://localhost:5173'
+    : 'https://vibecheck-phi.vercel.app';
 
 // Generate PKCE code verifier and challenge
 function generateCodeVerifier() {
