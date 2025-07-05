@@ -159,4 +159,4 @@ The app is set up for easy development with:
 - TypeScript for type safety
 - ESLint for code quality
 - Concurrent development servers
-- API proxy configuration in Vite
+- API proxy configuration in Vite// Force build Sat Jul  5 20:43:59 +08 2025
