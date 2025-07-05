@@ -1,39 +1,32 @@
 {
     "name": "vibecheck-me",
     "version": "1.0.0",
-    "description": "A full-stack React + Node.js app that creates ultimate playlists from Spotify top tracks",
+    "description": "A Spotify playlist generator that creates your ultimate vibe playlist",
     "main": "server.js",
     "scripts": {
         "dev": "concurrently \"npm run server\" \"npm run client\"",
         "server": "nodemon server.js",
         "client": "cd client && npm run dev",
-        "build": "cd client && npm run build",
+        "build": "cd client && npm install && npm run build",
         "start": "node server.js"
     },
     "dependencies": {
-        "class-variance-authority": "^0.7.1",
-        "clsx": "^2.1.1",
-        "cors": "^2.8.5",
-        "dotenv": "^16.3.1",
         "express": "^4.18.2",
         "express-session": "^1.17.3",
-        "lucide-react": "^0.525.0",
+        "dotenv": "^16.3.1",
         "spotify-web-api-node": "^5.0.2",
-        "tailwind-merge": "^3.3.1",
-        "tw-animate-css": "^1.3.5"
+        "cors": "^2.8.5"
     },
     "devDependencies": {
-        "concurrently": "^8.2.2",
-        "nodemon": "^3.0.1"
+        "nodemon": "^3.0.1",
+        "concurrently": "^8.2.2"
     },
     "keywords": [
         "spotify",
-        "music",
         "playlist",
-        "react",
-        "nodejs",
-        "express"
+        "music",
+        "vibe"
     ],
-    "author": "",
+    "author": "Adam Pang",
     "license": "MIT"
 }
