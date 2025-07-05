@@ -13,7 +13,7 @@ interface HomeProps {
     accessToken: string | null;
 }
 
-const CLIENT_ID = 'a7c7a6bd4b9c408294b6e9b78b0bc936';
+const CLIENT_ID = 'e4435ec6b82f42189d94e6229acad817';
 const REDIRECT_URI = window.location.hostname === 'localhost'
     ? 'http://localhost:5173'
     : 'https://vibecheck-phi.vercel.app';
