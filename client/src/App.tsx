@@ -24,8 +24,13 @@ export default function App() {
         // Check for existing user data
         const userData = localStorage.getItem('user_data');
         const token = localStorage.getItem('access_token');
+        const expiresAt = localStorage.getItem('token_expires_at');
 
         if (userData && token) {
+            // Check if token is expired
+            if (expiresAt && Date.now() >= parseInt(expiresAt)) {
+                console.log('🔄 Stored token is expired, will refresh on first API call');
+            }
             setUser(JSON.parse(userData));
             setAccessToken(token);
         }
@@ -118,8 +123,18 @@ export default function App() {
                 throw new Error('No access token received');
             }
 
-            // Store the access token
+            // Store the access token and refresh token
             localStorage.setItem('access_token', data.access_token);
+            if (data.refresh_token) {
+                localStorage.setItem('refresh_token', data.refresh_token);
+            }
+            
+            // Store expiration time (current time + expires_in seconds - 5 min buffer)
+            if (data.expires_in) {
+                const expiresAt = Date.now() + (data.expires_in - 300) * 1000;
+                localStorage.setItem('token_expires_at', expiresAt.toString());
+            }
+            
             setAccessToken(data.access_token);
 
             // Clean up
@@ -164,6 +179,8 @@ export default function App() {
             console.error('❌ OAuth callback failed:', error);
             // Clear any partial state
             localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('token_expires_at');
             localStorage.removeItem('user_data');
             localStorage.removeItem('code_verifier');
         } finally {

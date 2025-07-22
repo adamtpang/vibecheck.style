@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Music } from 'lucide-react';
+import { spotifyApiGet, spotifyApiPost } from '../utils/spotify-api';
 
 interface User {
     id: string;
@@ -19,14 +20,14 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        // If we have a user and access token, and no playlist yet, create one
-        if (user && accessToken && !user.playlistId && user.id === userId) {
+        // If we have a user and no playlist yet, create one
+        if (user && !user.playlistId && user.id === userId) {
             createUltimatePlaylist();
         }
-    }, [user, accessToken, userId]);
+    }, [user, userId]);
 
     const createUltimatePlaylist = async () => {
-        if (!accessToken || !user) return;
+        if (!user) return;
 
         setLoading(true);
         try {
@@ -34,15 +35,9 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
 
             // Get top tracks from all time periods
             const [shortTerm, mediumTerm, longTerm] = await Promise.all([
-                fetch(`https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=20`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                }).then(r => r.json()),
-                fetch(`https://api.spotify.com/v1/me/top/tracks?time_range=medium_term&limit=20`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                }).then(r => r.json()),
-                fetch(`https://api.spotify.com/v1/me/top/tracks?time_range=long_term&limit=20`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                }).then(r => r.json())
+                spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=20'),
+                spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=medium_term&limit=20'),
+                spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=long_term&limit=20')
             ]);
 
             console.log('📊 Track data:', {
@@ -67,34 +62,18 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
             console.log('🎵 Unique tracks found:', trackUris.length);
 
             // Create playlist
-            const playlistResponse = await fetch(`https://api.spotify.com/v1/users/${user.id}/playlists`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    name: 'Vibecheck - Ultimate Playlist',
-                    description: 'Your ultimate playlist from top tracks across all time periods • Created by Vibecheck.me',
-                    public: false,
-                }),
+            const playlist = await spotifyApiPost(`https://api.spotify.com/v1/users/${user.id}/playlists`, {
+                name: 'Vibecheck - Ultimate Playlist',
+                description: 'Your ultimate playlist from top tracks across all time periods • Created by Vibecheck.me',
+                public: false,
             });
-
-            const playlist = await playlistResponse.json();
             console.log('📝 Playlist created:', playlist.id);
 
             // Add tracks to playlist (max 100 at a time)
             if (trackUris.length > 0) {
                 const tracksToAdd = trackUris.slice(0, 100); // Spotify API limit
-                await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        uris: tracksToAdd
-                    }),
+                await spotifyApiPost(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
+                    uris: tracksToAdd
                 });
                 console.log('✅ Added tracks to playlist:', tracksToAdd.length);
             }
