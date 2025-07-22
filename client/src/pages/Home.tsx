@@ -15,9 +15,7 @@ interface HomeProps {
 }
 
 const CLIENT_ID = 'e4435ec6b82f42189d94e6229acad817';
-const REDIRECT_URI = window.location.hostname === 'localhost'
-    ? 'http://localhost:5173'
-    : 'https://vibecheck-phi.vercel.app';
+const REDIRECT_URI = 'https://vibecheck.style';
 
 // Debug logging
 console.log('🔍 DEBUG INFO:');
