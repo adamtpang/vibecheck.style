@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import Home from './pages/Home';
 import UserProfile from './pages/UserProfile';
+import Dashboard from './pages/Dashboard';
 import './index.css';
 
 interface User {
@@ -12,7 +13,7 @@ interface User {
 
 const CLIENT_ID = 'e4435ec6b82f42189d94e6229acad817'; // Vibecheck app
 const REDIRECT_URI = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
-    ? 'https://vibecheck.style'
+    ? 'http://localhost:3000/api/callback'
     : 'https://vibecheck.style';
 
 export default function App() {
@@ -175,6 +176,11 @@ export default function App() {
             setUser(user);
 
             console.log('✅ OAuth flow completed successfully');
+            
+            // Auto-create playlist after successful OAuth
+            setTimeout(() => {
+                window.location.href = `/user/${user.id}`;
+            }, 100);
         } catch (error) {
             console.error('❌ OAuth callback failed:', error);
             // Clear any partial state
@@ -190,10 +196,10 @@ export default function App() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-background flex items-center justify-center">
+            <div className="min-h-screen bg-white flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p className="text-muted-foreground">Loading...</p>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading...</p>
                 </div>
             </div>
         );
@@ -201,10 +207,11 @@ export default function App() {
 
     return (
         <Router>
-            <div className="min-h-screen bg-background">
+            <div className="min-h-screen bg-white">
                 <Routes>
                     <Route path="/" element={<Home user={user} setUser={setUser} accessToken={accessToken} />} />
                     <Route path="/user/:userId" element={<UserProfile user={user} accessToken={accessToken} setUser={setUser} />} />
+                    <Route path="/discover" element={<Dashboard currentUser={user} />} />
                 </Routes>
             </div>
         </Router>

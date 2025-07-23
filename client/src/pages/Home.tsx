@@ -15,7 +15,9 @@ interface HomeProps {
 }
 
 const CLIENT_ID = 'e4435ec6b82f42189d94e6229acad817';
-const REDIRECT_URI = 'https://vibecheck.style';
+const REDIRECT_URI = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+    ? 'http://localhost:3000/api/callback'
+    : 'https://vibecheck.style';
 
 // Debug logging
 console.log('🔍 DEBUG INFO:');
@@ -80,71 +82,48 @@ export default function Home({ user, setUser, accessToken }: HomeProps) {
         }
     };
 
-    const createUltimatePlaylist = async () => {
-        if (!accessToken || !user) return;
-
-        setLoading(true);
-        try {
-            // Navigate to profile immediately, playlist will be created there
-            navigate(`/user/${user.id}`);
-        } catch (error) {
-            console.error('Failed to navigate to profile:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     if (user) {
+        // User is logged in, redirect to their profile automatically
+        setTimeout(() => {
+            navigate(`/user/${user.id}`);
+        }, 100);
+        
         return (
-            <div className="min-h-screen bg-background flex items-center justify-center">
+            <div className="min-h-screen bg-white flex items-center justify-center">
                 <div className="text-center max-w-md mx-auto px-4">
                     <div className="flex items-center justify-center mb-8">
-                        <Music className="h-16 w-16 text-primary mr-4" />
-                        <h1 className="text-5xl font-bold text-foreground">Vibecheck</h1>
+                        <Music className="h-16 w-16 text-black mr-4" />
+                        <h1 className="text-5xl font-bold text-black">Vibecheck</h1>
                     </div>
 
-                    <p className="text-xl text-muted-foreground mb-8">
-                        Welcome back, {user.display_name}!
+                    <p className="text-xl text-gray-600 mb-8">
+                        Loading your vibe, {user.display_name}...
                     </p>
 
-                    <button
-                        onClick={createUltimatePlaylist}
-                        disabled={loading}
-                        className="bg-[#1DB954] text-white px-12 py-4 rounded-lg text-lg font-semibold hover:bg-[#1DB954]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 mx-auto"
-                    >
-                        {loading ? (
-                            <>
-                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                Loading...
-                            </>
-                        ) : (
-                            <>
-                                <Music className="h-6 w-6" />
-                                Create Ultimate Playlist
-                            </>
-                        )}
-                    </button>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="min-h-screen bg-white flex items-center justify-center">
             <div className="text-center max-w-md mx-auto px-4">
-                <div className="flex items-center justify-center mb-8">
-                    <Music className="h-16 w-16 text-primary mr-4" />
-                    <h1 className="text-5xl font-bold text-foreground">Vibecheck</h1>
+                <div className="flex items-center justify-center mb-12">
+                    <Music className="h-16 w-16 text-black mr-4" />
+                    <h1 className="text-5xl font-bold text-black">
+                        Vibecheck
+                    </h1>
                 </div>
 
-                <p className="text-xl text-muted-foreground mb-12">
-                    Your ultimate playlist from Spotify top tracks
+                <p className="text-xl text-gray-600 mb-16">
+                    Discover your ultimate music vibe from Spotify
                 </p>
 
                 <button
                     onClick={handleLogin}
                     disabled={loading}
-                    className="bg-[#1DB954] text-white px-12 py-4 rounded-lg text-lg font-semibold hover:bg-[#1DB954]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 mx-auto"
+                    className="bg-black text-white px-12 py-4 rounded-none text-lg font-medium hover:bg-gray-800 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 mx-auto border border-black"
                 >
                     {loading ? (
                         <>
