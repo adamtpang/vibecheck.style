@@ -38,11 +38,11 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
         try {
             console.log('🎵 Creating Ultimate Playlist...');
 
-            // Get top tracks from all time periods
+            // Get top tracks from all time periods with higher limits for better data
             const [shortTerm, mediumTerm, longTerm] = await Promise.all([
-                spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=20'),
-                spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=medium_term&limit=20'),
-                spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=long_term&limit=20')
+                spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=50'),
+                spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=medium_term&limit=50'),
+                spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=long_term&limit=50')
             ]);
 
             console.log('📊 Track data:', {
@@ -51,11 +51,18 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                 longTerm: longTerm.items?.length || 0
             });
 
-            // Combine tracks with priority to recent tracks, dedupe by track URI
-            const allTracks = new Set();
-            const trackDetails = [];
+            // Create weighted scoring system for better aggregation
+            const trackScores = new Map();
+            const trackDetails = new Map();
 
-            // Add short term first (most recent), then medium, then long term
+            // Scoring weights: Recent listening gets highest priority
+            const weights = {
+                short_term: 100,  // 4 weeks - highest weight
+                medium_term: 50,  // 6 months - medium weight  
+                long_term: 25     // All time - lower weight for recency
+            };
+
+            // Process each time range with weighted scoring
             const timeRanges = [
                 { tracks: shortTerm.items || [], label: 'short_term' },
                 { tracks: mediumTerm.items || [], label: 'medium_term' },
@@ -63,27 +70,45 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
             ];
 
             timeRanges.forEach(({ tracks, label }) => {
-                tracks.forEach(track => {
-                    if (!allTracks.has(track.uri)) {
-                        allTracks.add(track.uri);
-                        trackDetails.push({ ...track, timeRange: label });
+                tracks.forEach((track, index) => {
+                    const trackId = track.uri;
+                    // Calculate score: higher position (lower index) + time range weight
+                    const positionScore = (tracks.length - index) * weights[label];
+                    
+                    if (trackScores.has(trackId)) {
+                        trackScores.set(trackId, trackScores.get(trackId) + positionScore);
+                    } else {
+                        trackScores.set(trackId, positionScore);
+                        trackDetails.set(trackId, { ...track, timeRange: label, appearances: [] });
                     }
+                    
+                    // Track which time ranges this song appears in
+                    trackDetails.get(trackId).appearances.push({ timeRange: label, position: index + 1 });
                 });
             });
 
-            const trackUris = trackDetails.map(track => track.uri);
-            console.log('🎵 Unique tracks found:', trackUris.length);
-            console.log('📈 Track ordering: recent tracks prioritized at top');
+            // Sort tracks by aggregated score (highest first)
+            const sortedTracks = Array.from(trackScores.entries())
+                .sort(([,scoreA], [,scoreB]) => scoreB - scoreA)
+                .map(([uri, score]) => ({ 
+                    ...trackDetails.get(uri), 
+                    aggregatedScore: score,
+                    uri 
+                }));
+
+            const trackUris = sortedTracks.map(track => track.uri);
+            console.log('🎵 Aggregated tracks found:', trackUris.length);
+            console.log('📈 Track ordering: weighted by recency and position across all time ranges');
             
-            // Store top tracks for story generation
-            setTopTracks(trackDetails.slice(0, 10));
+            // Store top tracks for story generation and display
+            setTopTracks(sortedTracks.slice(0, 15));
 
             // Create vibe profile for compatibility analysis
             try {
                 const profile = await createVibeProfile(
                     user.id,
                     user.display_name,
-                    trackDetails
+                    sortedTracks
                 );
                 setVibeProfile(profile);
                 console.log('🧠 Vibe profile created successfully');
@@ -188,8 +213,69 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                         </div>
                     </div>
 
-                    {/* Playlist */}
+                    {/* Music Leaderboard */}
+                    {topTracks.length > 0 && (
+                        <div className="border border-gray-200 p-8 mb-8">
+                            <h2 className="text-2xl font-light text-black mb-8 text-center">Your Music Leaderboard</h2>
+                            <div className="space-y-4">
+                                {topTracks.slice(0, 10).map((track, index) => {
+                                    const timeRangeLabels = {
+                                        short_term: '4 weeks',
+                                        medium_term: '6 months', 
+                                        long_term: 'all time'
+                                    };
+                                    
+                                    return (
+                                        <div key={track.uri} className="flex items-center space-x-4 py-3 border-b border-gray-100 last:border-b-0">
+                                            <div className="text-2xl font-light text-gray-400 w-8">
+                                                #{index + 1}
+                                            </div>
+                                            
+                                            <div className="w-16 h-16 flex-shrink-0">
+                                                <img 
+                                                    src={track.album?.images?.[2]?.url || track.album?.images?.[0]?.url} 
+                                                    alt={track.album?.name}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </div>
+                                            
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="text-black font-medium text-lg truncate">
+                                                    {track.name}
+                                                </h3>
+                                                <p className="text-gray-600 text-sm truncate">
+                                                    {track.artists?.map(artist => artist.name).join(', ')}
+                                                </p>
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {track.appearances?.map((appearance, i) => (
+                                                        <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-1">
+                                                            #{appearance.position} in {timeRangeLabels[appearance.timeRange]}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="text-right">
+                                                <div className="text-lg font-medium text-black">
+                                                    {Math.round(track.aggregatedScore)}
+                                                </div>
+                                                <div className="text-xs text-gray-500">score</div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className="mt-6 text-center">
+                                <p className="text-gray-500 text-sm">
+                                    Rankings based on your listening patterns across 4 weeks, 6 months, and all-time data
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Spotify Playlist Embed */}
                     <div className="border border-gray-200 p-8">
+                        <h2 className="text-2xl font-light text-black mb-8 text-center">Your Ultimate Vibe Playlist</h2>
                         {loading ? (
                             <div className="py-16">
                                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-6"></div>
@@ -208,7 +294,7 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                                 <iframe
                                     src={`https://open.spotify.com/embed/playlist/${user.playlistId}?utm_source=generator&theme=0`}
                                     width="100%"
-                                    height="500"
+                                    height="400"
                                     frameBorder="0"
                                     allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                                     loading="lazy"
