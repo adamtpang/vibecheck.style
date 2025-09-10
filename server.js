@@ -169,7 +169,7 @@ async function createUltimatePlaylist(user) {
             try {
                 const topTracks = await userSpotifyApi.getMyTopTracks({
                     time_range: timeRange,
-                    limit: 20
+                    limit: 50
                 });
 
                 topTracks.body.items.forEach(track => {
