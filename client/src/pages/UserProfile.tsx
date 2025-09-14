@@ -138,6 +138,22 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
             setUser(updatedUser);
             localStorage.setItem('user_data', JSON.stringify(updatedUser));
 
+            // Save user data to serverless API
+            try {
+                const apiUrl = window.location.origin.includes('localhost') 
+                    ? 'http://localhost:3000/api/users'
+                    : '/api/users';
+                    
+                await fetch(`${apiUrl}/${user.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updatedUser)
+                });
+                console.log('✅ User data saved to API');
+            } catch (error) {
+                console.error('❌ Failed to save user data to API:', error);
+            }
+
             console.log('🎉 Ultimate playlist created successfully!');
         } catch (error) {
             console.error('❌ Failed to create playlist:', error);

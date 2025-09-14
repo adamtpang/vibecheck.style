@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Music, Users, Heart, MapPin, Search } from 'lucide-react';
+import { Music, Users, Heart, MapPin, Search, Trash2, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface User {
     id: string;
     display_name: string;
     playlistId?: string;
+    lastUpdated?: string;
     compatibilityScore?: number;
     distance?: number;
     topGenres?: string[];
@@ -56,10 +57,53 @@ const mockUsers: User[] = [
 ];
 
 export default function Dashboard({ currentUser }: DashboardProps) {
-    const [users, setUsers] = useState<User[]>(mockUsers);
+    const [users, setUsers] = useState<User[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortBy, setSortBy] = useState<'compatibility' | 'distance' | 'recent'>('compatibility');
+    const [sortBy, setSortBy] = useState<'compatibility' | 'distance' | 'recent'>('recent');
     const [showNearbyOnly, setShowNearbyOnly] = useState(false);
+    const [showAdmin, setShowAdmin] = useState(false);
+
+    const apiUrl = window.location.origin.includes('localhost') 
+        ? 'http://localhost:3000/api'
+        : '/api';
+
+    const fetchUsers = async () => {
+        setLoading(true);
+        try {
+            const response = await fetch(`${apiUrl}/users`);
+            const data = await response.json();
+            setUsers(data.users || []);
+        } catch (error) {
+            console.error('Failed to fetch users:', error);
+            // Fallback to mock data if API fails
+            setUsers(mockUsers);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const clearAllUsers = async () => {
+        if (!confirm('Are you sure you want to delete all users? This cannot be undone.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${apiUrl}/users?secret=vibecheck_admin_clear`, {
+                method: 'DELETE'
+            });
+            const result = await response.json();
+            alert(`Deleted ${result.deletedCount} users`);
+            fetchUsers(); // Refresh the list
+        } catch (error) {
+            console.error('Failed to clear users:', error);
+            alert('Failed to clear users');
+        }
+    };
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
 
     const filteredUsers = users
         .filter(user => 
@@ -74,7 +118,10 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                     return (a.distance || 999) - (b.distance || 999);
                 case 'recent':
                 default:
-                    return 0;
+                    // Sort by lastUpdated, most recent first
+                    const dateA = new Date(a.lastUpdated || '1970-01-01').getTime();
+                    const dateB = new Date(b.lastUpdated || '1970-01-01').getTime();
+                    return dateB - dateA;
             }
         });
 
@@ -100,6 +147,37 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                     <p className="text-gray-600 text-lg font-light">
                         Explore music vibes from the Vibecheck community
                     </p>
+                    
+                    {/* Admin Controls */}
+                    <div className="mt-6 space-y-2">
+                        <button
+                            onClick={() => setShowAdmin(!showAdmin)}
+                            className="text-gray-400 text-xs hover:text-black transition-colors"
+                        >
+                            {showAdmin ? 'Hide' : 'Show'} Admin
+                        </button>
+                        
+                        {showAdmin && (
+                            <div className="flex gap-4 justify-center">
+                                <button
+                                    onClick={fetchUsers}
+                                    disabled={loading}
+                                    className="flex items-center gap-2 text-sm border border-gray-300 px-4 py-2 hover:border-black transition-colors disabled:opacity-50"
+                                >
+                                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                    Refresh ({users.length} users)
+                                </button>
+                                
+                                <button
+                                    onClick={clearAllUsers}
+                                    className="flex items-center gap-2 text-sm border border-red-300 text-red-600 px-4 py-2 hover:border-red-500 hover:bg-red-50 transition-colors"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                    Clear All Users
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Controls */}
@@ -146,7 +224,13 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
                 {/* User Grid */}
                 <div className="max-w-6xl mx-auto">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {loading ? (
+                        <div className="text-center py-12">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
+                            <p className="text-gray-600">Loading vibes...</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredUsers.map(user => (
                             <Link
                                 key={user.id}
@@ -164,11 +248,17 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                                             <div>
                                                 <h3 className="font-medium text-black text-lg">{user.display_name}</h3>
                                                 <div className="flex items-center space-x-2 text-sm text-gray-500">
-                                                    {user.distance && (
+                                                    {user.lastUpdated ? (
+                                                        <span>
+                                                            Updated {new Date(user.lastUpdated).toLocaleDateString()}
+                                                        </span>
+                                                    ) : user.distance ? (
                                                         <span className="flex items-center">
                                                             <MapPin className="h-3 w-3 mr-1" />
                                                             {user.distance}km away
                                                         </span>
+                                                    ) : (
+                                                        <span className="text-gray-400">No recent activity</span>
                                                     )}
                                                 </div>
                                             </div>
@@ -222,7 +312,10 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                         ))}
                     </div>
 
-                    {filteredUsers.length === 0 && (
+                        </div>
+                    )}
+
+                    {!loading && filteredUsers.length === 0 && (
                         <div className="text-center py-12">
                             <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                             <p className="text-gray-500 text-lg">No vibes found matching your search</p>

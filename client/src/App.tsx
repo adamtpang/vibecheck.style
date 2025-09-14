@@ -14,7 +14,7 @@ interface User {
 const CLIENT_ID = 'e4435ec6b82f42189d94e6229acad817'; // Vibecheck app
 const REDIRECT_URI = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
     ? 'http://localhost:3000/api/callback'
-    : 'https://vibecheck.style';
+    : 'https://vibecheck.style/api/callback';
 
 export default function App() {
     const [user, setUser] = useState<User | null>(null);
