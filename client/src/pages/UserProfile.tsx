@@ -36,7 +36,6 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
 
         setLoading(true);
         try {
-            console.log('🎵 Creating Ultimate Playlist...');
 
             // Get top tracks from all time periods with higher limits for better data
             const [shortTerm, mediumTerm, longTerm] = await Promise.all([
@@ -45,11 +44,6 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                 spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=long_term&limit=50')
             ]);
 
-            console.log('📊 Track data:', {
-                shortTerm: shortTerm.items?.length || 0,
-                mediumTerm: mediumTerm.items?.length || 0,
-                longTerm: longTerm.items?.length || 0
-            });
 
             // Create weighted scoring system for better aggregation
             const trackScores = new Map();
@@ -97,8 +91,6 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                 }));
 
             const trackUris = sortedTracks.map(track => track.uri);
-            console.log('🎵 Aggregated tracks found:', trackUris.length);
-            console.log('📈 Track ordering: weighted by recency and position across all time ranges');
             
             // Store top tracks for story generation and display
             setTopTracks(sortedTracks.slice(0, 15));
@@ -111,9 +103,8 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                     sortedTracks
                 );
                 setVibeProfile(profile);
-                console.log('🧠 Vibe profile created successfully');
             } catch (error) {
-                console.error('❌ Failed to create vibe profile:', error);
+                // Failed to create vibe profile
             }
 
             // Create playlist
@@ -122,7 +113,6 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                 description: `${user.display_name}'s music vibe`,
                 public: false,
             });
-            console.log('📝 Playlist created:', playlist.id);
 
             // Add tracks to playlist (max 100 at a time)
             if (trackUris.length > 0) {
@@ -130,7 +120,6 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                 await spotifyApiPost(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
                     uris: tracksToAdd
                 });
-                console.log('✅ Added tracks to playlist:', tracksToAdd.length);
             }
 
             // Update user data with playlist ID
@@ -149,14 +138,12 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(updatedUser)
                 });
-                console.log('✅ User data saved to API');
             } catch (error) {
-                console.error('❌ Failed to save user data to API:', error);
+                // Failed to save user data to API
             }
 
-            console.log('🎉 Ultimate playlist created successfully!');
         } catch (error) {
-            console.error('❌ Failed to create playlist:', error);
+            // Failed to create playlist
         } finally {
             setLoading(false);
         }

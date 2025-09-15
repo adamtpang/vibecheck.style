@@ -11,7 +11,7 @@ interface User {
     playlistId?: string;
 }
 
-const CLIENT_ID = 'e4435ec6b82f42189d94e6229acad817'; // Vibecheck app
+const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
 const REDIRECT_URI = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
     ? 'http://localhost:3000/api/callback'
     : 'https://vibecheck.style/api/callback';
@@ -30,7 +30,7 @@ export default function App() {
         if (userData && token) {
             // Check if token is expired
             if (expiresAt && Date.now() >= parseInt(expiresAt)) {
-                console.log('🔄 Stored token is expired, will refresh on first API call');
+                // Token is expired, will refresh on first API call
             }
             setUser(JSON.parse(userData));
             setAccessToken(token);
@@ -41,20 +41,13 @@ export default function App() {
         const code = urlParams.get('code');
         const error = urlParams.get('error');
 
-        console.log('🔍 OAUTH CALLBACK CHECK:');
-        console.log('- Current URL:', window.location.href);
-        console.log('- Has code param:', !!code);
-        console.log('- Has error param:', !!error);
 
         if (error) {
-            console.error('❌ OAuth error:', error);
-            console.error('- Error description:', urlParams.get('error_description'));
             setLoading(false);
             return;
         }
 
         if (code) {
-            console.log('🔄 Processing OAuth code:', code.substring(0, 20) + '...');
             handleOAuthCallback(code);
         } else {
             setLoading(false);
@@ -65,14 +58,8 @@ export default function App() {
         try {
             const codeVerifier = localStorage.getItem('code_verifier');
 
-            console.log('🔄 TOKEN EXCHANGE STARTING:');
-            console.log('- Code verifier found:', !!codeVerifier);
-            console.log('- Code verifier length:', codeVerifier?.length);
-            console.log('- Client ID:', CLIENT_ID);
-            console.log('- Redirect URI:', REDIRECT_URI);
 
             if (!codeVerifier) {
-                console.error('❌ Code verifier not found in localStorage');
                 throw new Error('Code verifier not found');
             }
 
@@ -84,12 +71,6 @@ export default function App() {
                 code_verifier: codeVerifier,
             };
 
-            console.log('📤 TOKEN REQUEST DATA:');
-            console.log('- Grant type:', tokenData.grant_type);
-            console.log('- Code:', tokenData.code.substring(0, 20) + '...');
-            console.log('- Redirect URI:', tokenData.redirect_uri);
-            console.log('- Client ID:', tokenData.client_id);
-            console.log('- Code verifier:', tokenData.code_verifier.substring(0, 20) + '...');
 
             const response = await fetch('https://accounts.spotify.com/api/token', {
                 method: 'POST',
@@ -99,28 +80,15 @@ export default function App() {
                 body: new URLSearchParams(tokenData),
             });
 
-            console.log('�� TOKEN RESPONSE:');
-            console.log('- Status:', response.status);
-            console.log('- Status text:', response.statusText);
-            console.log('- Headers:', Object.fromEntries(response.headers.entries()));
 
             const data = await response.json();
 
-            console.log('📄 TOKEN RESPONSE DATA:');
-            console.log('- Success:', !!data.access_token);
-            console.log('- Has refresh token:', !!data.refresh_token);
-            console.log('- Token type:', data.token_type);
-            console.log('- Expires in:', data.expires_in);
-            console.log('- Scope:', data.scope);
 
             if (data.error) {
-                console.error('❌ TOKEN ERROR:', data.error);
-                console.error('- Error description:', data.error_description);
                 throw new Error(data.error_description || data.error);
             }
 
             if (!data.access_token) {
-                console.error('❌ No access token received');
                 throw new Error('No access token received');
             }
 
@@ -143,27 +111,17 @@ export default function App() {
             window.history.replaceState({}, document.title, '/');
 
             // Get user profile
-            console.log('👤 FETCHING USER PROFILE...');
             const userResponse = await fetch('https://api.spotify.com/v1/me', {
                 headers: {
                     'Authorization': `Bearer ${data.access_token}`,
                 },
             });
 
-            console.log('📥 USER PROFILE RESPONSE:');
-            console.log('- Status:', userResponse.status);
-            console.log('- Status text:', userResponse.statusText);
 
             const userData = await userResponse.json();
 
-            console.log('👤 USER DATA:');
-            console.log('- ID:', userData.id);
-            console.log('- Display name:', userData.display_name);
-            console.log('- Country:', userData.country);
-            console.log('- Email:', userData.email);
 
             if (userData.error) {
-                console.error('❌ USER PROFILE ERROR:', userData.error);
                 throw new Error(userData.error.message || 'Failed to get user profile');
             }
 
@@ -174,15 +132,12 @@ export default function App() {
 
             localStorage.setItem('user_data', JSON.stringify(user));
             setUser(user);
-
-            console.log('✅ OAuth flow completed successfully');
             
             // Auto-create playlist after successful OAuth
             setTimeout(() => {
                 window.location.href = `/user/${user.id}`;
             }, 100);
         } catch (error) {
-            console.error('❌ OAuth callback failed:', error);
             // Clear any partial state
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');

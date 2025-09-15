@@ -5,6 +5,12 @@ import path from 'path'
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [react()],
+    build: {
+        minify: 'esbuild',
+    },
+    esbuild: {
+        drop: ['console', 'debugger'],
+    },
     resolve: {
         alias: {
             "@": path.resolve(__dirname, "./src"),
