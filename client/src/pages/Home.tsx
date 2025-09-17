@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music } from 'lucide-react';
+import { Music, Users, Heart } from 'lucide-react';
 
 interface User {
     id: string;
@@ -97,17 +97,42 @@ export default function Home({ user, setUser, accessToken }: HomeProps) {
 
     return (
         <div className="min-h-screen bg-white flex items-center justify-center">
-            <div className="text-center max-w-md mx-auto px-4">
-                <div className="flex items-center justify-center mb-12">
+            <div className="text-center max-w-4xl mx-auto px-4">
+                <div className="flex items-center justify-center mb-8">
                     <Music className="h-16 w-16 text-black mr-4" />
                     <h1 className="text-5xl font-bold text-black">
                         Vibecheck
                     </h1>
                 </div>
 
-                <p className="text-xl text-gray-600 mb-16">
-                    Discover your ultimate music vibe from Spotify
-                </p>
+                <div className="mb-12 max-w-2xl mx-auto">
+                    <div className="border-l-4 border-black pl-6 mb-8">
+                        <h2 className="text-lg font-medium text-black mb-3">What is vibecheck.style?</h2>
+                        <p className="text-gray-600 leading-relaxed">
+                            Connect your Spotify to analyze your listening patterns across different time periods.
+                            We create your ultimate vibe playlist, calculate your music DNA, and let you discover
+                            compatibility with others in the community.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                        <div className="border border-gray-200 p-4">
+                            <Music className="h-8 w-8 text-black mx-auto mb-2" />
+                            <h3 className="font-medium text-black mb-1">Analyze</h3>
+                            <p className="text-sm text-gray-600">Top tracks from 4 weeks, 6 months, and all-time</p>
+                        </div>
+                        <div className="border border-gray-200 p-4">
+                            <Users className="h-8 w-8 text-black mx-auto mb-2" />
+                            <h3 className="font-medium text-black mb-1">Discover</h3>
+                            <p className="text-sm text-gray-600">Find music compatibility with other users</p>
+                        </div>
+                        <div className="border border-gray-200 p-4">
+                            <Heart className="h-8 w-8 text-black mx-auto mb-2" />
+                            <h3 className="font-medium text-black mb-1">Share</h3>
+                            <p className="text-sm text-gray-600">Your unique vibe profile and playlist</p>
+                        </div>
+                    </div>
+                </div>
 
                 <button
                     onClick={handleLogin}

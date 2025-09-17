@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Music } from 'lucide-react';
 import StoryGenerator from '../components/StoryGenerator';
+import PaymentGate from '../components/PaymentGate';
 import { spotifyApiGet, spotifyApiPost } from '../utils/spotify-api';
 import { createVibeProfile, VibeProfile } from '../utils/vibe-analysis';
+import { detectAppContext, hasReachedUsageLimit, incrementUsageCount, getUsageStats } from '../utils/context-detection';
 
 interface User {
     id: string;
@@ -21,18 +23,26 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
     const { userId } = useParams<{ userId: string }>();
     const [loading, setLoading] = useState(false);
     const [showStoryGenerator, setShowStoryGenerator] = useState(false);
+    const [showPaymentGate, setShowPaymentGate] = useState(false);
     const [topTracks, setTopTracks] = useState<any[]>([]);
     const [vibeProfile, setVibeProfile] = useState<VibeProfile | null>(null);
+    const [appContext] = useState(detectAppContext());
 
     useEffect(() => {
-        // If we have a user and no playlist yet, create one
+        // If we have a user and no playlist yet, create one (bypassing payment check for first-time users)
         if (user && !user.playlistId && user.id === userId) {
-            createUltimatePlaylist();
+            createUltimatePlaylist(true);
         }
     }, [user, userId]);
 
-    const createUltimatePlaylist = async () => {
+    const createUltimatePlaylist = async (bypassPaymentCheck = false) => {
         if (!user) return;
+
+        // Check usage limits for Farcaster context (unless bypassing)
+        if (!bypassPaymentCheck && hasReachedUsageLimit(user.id)) {
+            setShowPaymentGate(true);
+            return;
+        }
 
         setLoading(true);
         try {
@@ -122,6 +132,9 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                 });
             }
 
+            // Increment usage count for Farcaster users
+            incrementUsageCount(user.id);
+
             // Update user data with playlist ID
             const updatedUser = { ...user, playlistId: playlist.id };
             setUser(updatedUser);
@@ -174,6 +187,24 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                             </h1>
                         </div>
                         <p className="text-gray-600 text-lg font-light">Your Music Vibe</p>
+
+                        {/* Usage Stats for Farcaster */}
+                        {appContext === 'farcaster' && user && (
+                            <div className="mt-4 text-center">
+                                {(() => {
+                                    const { count, remaining } = getUsageStats(user.id);
+                                    return remaining === -1 ? null : (
+                                        <p className="text-sm text-gray-500">
+                                            {remaining > 0 ? (
+                                                `${remaining} free vibecheck${remaining === 1 ? '' : 's'} remaining this month`
+                                            ) : (
+                                                'Monthly limit reached - unlock unlimited access'
+                                            )}
+                                        </p>
+                                    );
+                                })()}
+                            </div>
+                        )}
                         
                         {/* Vibe Profile Stats */}
                         {vibeProfile && (
@@ -368,6 +399,18 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                     user={user}
                     topTracks={topTracks}
                     onClose={() => setShowStoryGenerator(false)}
+                />
+            )}
+
+            {/* Payment Gate Modal */}
+            {showPaymentGate && user && (
+                <PaymentGate
+                    onSuccess={() => {
+                        setShowPaymentGate(false);
+                        createUltimatePlaylist(true); // Bypass payment check after successful payment
+                    }}
+                    onClose={() => setShowPaymentGate(false)}
+                    remainingUses={getUsageStats(user.id).remaining}
                 />
             )}
         </div>
