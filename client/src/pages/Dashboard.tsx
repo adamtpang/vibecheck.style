@@ -311,8 +311,6 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                             </Link>
                         ))}
                     </div>
-
-                        </div>
                     )}
 
                     {!loading && filteredUsers.length === 0 && (
