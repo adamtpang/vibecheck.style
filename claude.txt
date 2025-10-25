@@ -1,0 +1,233 @@
+# Vibecheck.style - Claude Code Context File
+Last Updated: 2025-10-15
+
+## Project Overview
+Vibecheck.style is a Spotify-powered web application that:
+- Generates personalized "mega playlists" from users' top tracks
+- Analyzes music vibes and creates shareable profiles
+- Allows users to discover others with similar music tastes
+- Provides compatibility scores between users
+
+## Tech Stack
+- **Frontend**: React 18.2, Vite, TypeScript
+- **Backend**: Node.js, Express
+- **Styling**: Tailwind CSS v3, OKLCH color system
+- **APIs**: Spotify Web API
+- **Deployment**: Likely Vercel (based on user environment)
+
+## 🚨 IMMEDIATE ISSUE (Current Session)
+
+**Problem**: Analytics page with new design components exists but is NOT routed in App.tsx!
+
+**Status**: User started dev server and can't see new design changes
+**Why**: The Analytics page (`client/src/pages/Analytics.tsx`) was created but never added to the routing configuration in `client/src/App.tsx`
+
+**Current Routes in App.tsx (lines 166-170)**:
+- `/` → Home (landing/login)
+- `/user/:userId` → UserProfile (individual profiles)
+- `/discover` → Dashboard (user directory)
+
+**Analytics page includes all new components but has NO ROUTE**:
+- DashboardHeader
+- StatsOverview
+- TopTracks
+- TopArtists
+- RecentActivity
+- PlaylistGenerator
+
+**Solutions to discuss with user**:
+1. Add new route: `/analytics` → Analytics
+2. Replace `/discover` Dashboard with Analytics
+3. Replace `/user/:userId` UserProfile with Analytics
+4. Integrate Analytics components into existing pages
+
+**Dev server is running**: http://localhost:5173/
+
+---
+
+## Recent Changes (This Session)
+
+### Design System Upgrade
+Successfully incorporated new modern design with:
+- Updated `client/src/index.css` with OKLCH color variables (better color accuracy)
+- Added `tw-animate-css` dependency to package.json
+- Created new UI components:
+  - `client/src/components/ui/button.tsx`
+  - `client/src/components/ui/card.tsx`
+
+### New Dashboard Components
+Created 6 new components with modern analytics-focused design:
+1. `client/src/components/dashboard-header.tsx` - Header with branding and user actions
+2. `client/src/components/stats-overview.tsx` - 4-card stats grid (listening time, tracks, genre, vibe score)
+3. `client/src/components/top-tracks.tsx` - Top 5 tracks with play counts
+4. `client/src/components/top-artists.tsx` - Top 4 artists grid
+5. `client/src/components/playlist-generator.tsx` - Mega playlist export card
+6. `client/src/components/recent-activity.tsx` - Activity timeline
+
+### New Page
+Created `client/src/pages/Analytics.tsx` - Complete analytics dashboard using all new components
+
+### Build Status
+✅ All dependencies installed successfully
+✅ Build completed with no errors (vite build successful)
+
+## Project Structure
+```
+vibecheck.style/
+├── server.js                          # Express backend
+├── client/
+│   ├── src/
+│   │   ├── pages/
+│   │   │   ├── Home.tsx              # Landing/login page
+│   │   │   ├── Dashboard.tsx         # User discovery/directory page
+│   │   │   ├── UserProfile.tsx       # Individual user vibe pages
+│   │   │   └── Analytics.tsx         # NEW: Analytics dashboard
+│   │   ├── components/
+│   │   │   ├── ui/                   # NEW: Reusable UI components
+│   │   │   ├── dashboard-header.tsx  # NEW
+│   │   │   ├── stats-overview.tsx    # NEW
+│   │   │   ├── top-tracks.tsx        # NEW
+│   │   │   ├── top-artists.tsx       # NEW
+│   │   │   ├── playlist-generator.tsx # NEW
+│   │   │   ├── recent-activity.tsx   # NEW
+│   │   │   ├── StoryGenerator.tsx    # Instagram story generation
+│   │   │   └── PaymentGate.tsx       # Payment/monetization
+│   │   ├── utils/
+│   │   │   ├── spotify-api.ts        # Spotify API wrapper
+│   │   │   ├── vibe-analysis.ts      # Music analysis logic
+│   │   │   └── context-detection.ts  # Context detection utils
+│   │   ├── lib/
+│   │   │   └── utils.ts              # cn() utility for class merging
+│   │   ├── index.css                 # UPDATED: OKLCH colors
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   └── package.json
+└── package.json
+```
+
+## Current Functionality
+1. ✅ Spotify OAuth login
+2. ✅ Mega playlist generation from user's top tracks
+3. ✅ User profiles viewable at `/user/:id`
+4. ✅ User directory/discovery dashboard with search/filter
+5. ✅ Compatibility scores between users (mock data currently)
+6. ✅ Instagram story generator (StoryGenerator.tsx)
+7. ✅ Admin panel to manage users
+
+## Feature Roadmap (User Requests)
+
+### High Priority
+1. **Auto-Refresh Cronjob**
+   - Set up scheduled job (weekly/monthly) to update playlists
+   - Location: Create `/api/refresh-all-playlists` endpoint in server.js
+   - Tech: node-cron or Vercel Cron Jobs
+   - Updates user data from Spotify automatically
+
+2. **Individual User Pages Enhancement (Link in Bio)**
+   - Already exists at `/user/:id` route
+   - Needs: Better og:meta tags for social media previews
+   - Needs: Shareable URL format (e.g., vibecheck.style/@username)
+   - Make it more presentable for Instagram/Twitter bios
+
+3. **Improved OAuth Onboarding**
+   - Problem: Users don't remember Spotify credentials
+   - Solution: Add pre-auth instructions
+   - Add "Check if logged in" button that opens spotify.com
+   - Better error messaging and guidance
+
+4. **Instagram Story Feature Enhancement**
+   - Already have StoryGenerator.tsx component
+   - TODO: Include top song playback/recommendation in story
+   - TODO: Make it more viral-friendly with better visuals
+   - Consider: Dynamic album art, animated elements
+
+### Medium Priority
+5. **User Directory & Compatibility**
+   - Current: Dashboard.tsx shows users with mock compatibility
+   - TODO: Implement real compatibility algorithm
+   - TODO: Add filtering by location, genre, vibe score
+   - TODO: Make it more social (follow, message?)
+
+6. **Shareable User Links**
+   - Enable users to add vibecheck.style/@username to:
+     - Instagram bio
+     - Twitter/X bio
+     - Spotify bio
+     - SoundCloud bio
+     - Linktree
+   - Product-led growth opportunity
+
+### Future/Nice-to-Have
+7. **YouTube Music Integration**
+   - Requires: Google OAuth
+   - API: YouTube Music API
+   - New set of feature development
+
+8. **Apple Music Integration**
+   - Requires: MusicKit JS
+   - API: Apple Music API
+   - New set of feature development
+
+## Key Issues & Solutions
+
+### Issue: Spotify OAuth Confusion
+- **Problem**: Users shown the app don't remember Spotify username/password
+- **Root Cause**: They don't realize OAuth uses their existing Spotify session
+- **Solution**: Add prominent message: "Make sure you're logged into Spotify in your browser first" + pre-check button
+
+### Issue: Data Staleness
+- **Problem**: User playlists/data don't auto-update
+- **Solution**: Implement cronjob system (priority feature #1)
+
+### Issue: Discoverability
+- **Problem**: Need viral growth mechanisms
+- **Solution**: Enhanced IG stories + shareable user pages (priority features #3-4)
+
+## Environment Notes
+- Working directory: `/home/adampangelinan/ubuntu-projects/vibecheck.style/client`
+- Platform: Linux (WSL2)
+- Git repo: Yes, on master branch (clean working tree)
+- Recent commits focus on UI/UX upgrades
+
+## Next Steps
+1. Wire up Analytics page to routing in App.tsx
+2. Replace mock data with real Spotify API calls
+3. Implement one of the high-priority features (suggest starting with OAuth improvements)
+4. Consider adding route to easily access Analytics dashboard
+
+## Important Files to Reference
+- `server.js` - Main backend server with Spotify OAuth and API endpoints
+- `client/src/pages/Dashboard.tsx` - User directory with compatibility scores (lines 59-336)
+- `client/src/pages/UserProfile.tsx` - Individual user profiles
+- `client/src/components/StoryGenerator.tsx` - IG story generation logic
+- `client/src/utils/spotify-api.ts` - Spotify API wrapper functions
+- `client/src/utils/vibe-analysis.ts` - Music vibe analysis algorithms
+
+## Commands
+- Dev server: `npm run dev` (runs both backend and frontend via concurrently)
+- Build: `cd client && npm run build`
+- Backend only: `npm run server`
+- Frontend only: `npm run client`
+
+## Color System (OKLCH Variables)
+The app now uses modern OKLCH color space for better perceptual uniformity:
+- Primary: oklch(0.205 0 0) - Near black
+- Background: oklch(1 0 0) - White
+- Muted: oklch(0.97 0 0) - Light gray
+- Accent colors for charts available (chart-1 through chart-5)
+
+## Git Status (Last Known)
+- Branch: master
+- Status: Clean
+- Recent commit: "New uiux to prod? and remove favicon"
+
+---
+
+## For Next Session
+When you restart Claude Code, reference this file to understand:
+1. What's been built so far
+2. What the user wants to build next
+3. Current project structure and key files
+4. Outstanding issues and their solutions
+
+Priority question to ask user: "Which feature from the roadmap would you like to tackle first?"
