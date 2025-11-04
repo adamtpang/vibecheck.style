@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Home from './pages/Home';
 import UserProfile from './pages/UserProfile';
 import Dashboard from './pages/Dashboard';
+import Analytics from './pages/Analytics';
 import './index.css';
 
 interface User {
@@ -167,6 +168,7 @@ export default function App() {
                     <Route path="/" element={<Home user={user} setUser={setUser} accessToken={accessToken} />} />
                     <Route path="/user/:userId" element={<UserProfile user={user} accessToken={accessToken} setUser={setUser} />} />
                     <Route path="/discover" element={<Dashboard currentUser={user} />} />
+                    <Route path="/analytics" element={<Analytics />} />
                 </Routes>
             </div>
         </Router>

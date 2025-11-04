@@ -101,7 +101,14 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
                 }));
 
             const trackUris = sortedTracks.map(track => track.uri);
-            
+
+            // Check if user has any tracks
+            if (trackUris.length === 0) {
+                alert('No listening history found! 🎵\n\nYour Spotify account needs some music history before we can create your vibe.\n\nGo listen to at least 10-20 songs on Spotify, then come back and refresh!');
+                setLoading(false);
+                return;
+            }
+
             // Store top tracks for story generation and display
             setTopTracks(sortedTracks.slice(0, 15));
 
@@ -156,7 +163,8 @@ export default function UserProfile({ user, accessToken, setUser }: UserProfileP
             }
 
         } catch (error) {
-            // Failed to create playlist
+            console.error('❌ Failed to create playlist:', error);
+            alert('Failed to create your vibe playlist. This might be because:\n\n1. Your Spotify account is brand new with no listening history\n2. You need to listen to more music on Spotify first\n3. There was a connection issue\n\nTry listening to some songs on Spotify and refresh your vibe!');
         } finally {
             setLoading(false);
         }
