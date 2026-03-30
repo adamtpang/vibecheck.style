@@ -1,253 +1,205 @@
 import { useState, useRef, useEffect } from 'react';
-import { Music, Download, Share, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface StoryGeneratorProps {
-    user: {
-        display_name: string;
-        id: string;
-    };
-    topTracks?: Array<{
-        name: string;
-        artists: Array<{ name: string }>;
-        album: { images: Array<{ url: string }> };
-    }>;
-    onClose: () => void;
+  user: { display_name: string; id: string };
+  topTracks?: Array<{
+    name: string;
+    artists: Array<{ name: string }>;
+    album: { images: Array<{ url: string }> };
+  }>;
+  vibeLabel: string;
+  gradient?: string;
+  onClose: () => void;
 }
 
-export default function StoryGenerator({ user, topTracks = [], onClose }: StoryGeneratorProps) {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+export default function StoryGenerator({ user, topTracks = [], vibeLabel, onClose }: StoryGeneratorProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
 
-    const generateStory = async () => {
-        setIsGenerating(true);
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+  const generateStory = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-        // Set canvas size for Instagram story (9:16 aspect ratio)
-        canvas.width = 1080;
-        canvas.height = 1920;
+    canvas.width = 1080;
+    canvas.height = 1920;
 
-        // Create gradient background
-        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        gradient.addColorStop(0, '#581c87'); // purple-900
-        gradient.addColorStop(0.5, '#be185d'); // pink-700
-        gradient.addColorStop(1, '#ea580c'); // orange-600
+    // Background gradient
+    const bg = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    bg.addColorStop(0, '#0a0a0a');
+    bg.addColorStop(0.5, '#1a1a2e');
+    bg.addColorStop(1, '#0a0a0a');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Subtle grain
+    ctx.globalAlpha = 0.05;
+    for (let i = 0; i < 3000; i++) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 1, 1);
+    }
+    ctx.globalAlpha = 1;
 
-        // Add noise/grain texture
-        ctx.globalAlpha = 0.1;
-        for (let i = 0; i < 5000; i++) {
-            const x = Math.random() * canvas.width;
-            const y = Math.random() * canvas.height;
-            ctx.fillStyle = Math.random() > 0.5 ? '#ffffff' : '#000000';
-            ctx.fillRect(x, y, 1, 1);
-        }
-        ctx.globalAlpha = 1;
+    // "vibecheck.style" at top
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '300 36px -apple-system, sans-serif';
+    ctx.fillText('vibecheck.style', canvas.width / 2, 120);
 
-        // Add title
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 80px Arial, sans-serif';
-        ctx.fillText('VIBECHECK', canvas.width / 2, 300);
-        
-        // Add user name with gradient effect
-        ctx.font = 'bold 60px Arial, sans-serif';
-        const nameGradient = ctx.createLinearGradient(0, 350, canvas.width, 350);
-        nameGradient.addColorStop(0, '#fbbf24'); // yellow-400
-        nameGradient.addColorStop(0.5, '#ec4899'); // pink-500
-        nameGradient.addColorStop(1, '#22d3ee'); // cyan-400
-        ctx.fillStyle = nameGradient;
-        ctx.fillText(user.display_name, canvas.width / 2, 400);
+    // User name
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 72px -apple-system, sans-serif';
+    ctx.fillText(user.display_name, canvas.width / 2, 400);
 
-        // Add subtitle
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '36px Arial, sans-serif';
-        ctx.fillText("'s Music Vibe", canvas.width / 2, 460);
+    // Vibe label — the hero
+    ctx.font = 'bold 84px -apple-system, sans-serif';
+    const labelGradient = ctx.createLinearGradient(100, 500, 980, 600);
+    labelGradient.addColorStop(0, '#1DB954');
+    labelGradient.addColorStop(1, '#1ed760');
+    ctx.fillStyle = labelGradient;
 
-        // Add top tracks
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 42px Arial, sans-serif';
-        ctx.fillText('Currently Vibing:', 80, 600);
+    // Word wrap the vibe label
+    const words = vibeLabel.split(' ');
+    let line = '';
+    let y = 560;
+    for (const word of words) {
+      const test = line + word + ' ';
+      if (ctx.measureText(test).width > 900 && line) {
+        ctx.fillText(line.trim(), canvas.width / 2, y);
+        line = word + ' ';
+        y += 100;
+      } else {
+        line = test;
+      }
+    }
+    ctx.fillText(line.trim(), canvas.width / 2, y);
 
-        const tracksToShow = topTracks.slice(0, 4);
-        tracksToShow.forEach((track, index) => {
-            const y = 700 + (index * 120);
-            
-            // Track number with circle background
-            ctx.beginPath();
-            ctx.arc(120, y - 15, 25, 0, 2 * Math.PI);
-            ctx.fillStyle = '#22d3ee';
-            ctx.fill();
-            
-            ctx.fillStyle = '#000000';
-            ctx.font = 'bold 32px Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText((index + 1).toString(), 120, y - 5);
-            
-            // Track info
-            ctx.textAlign = 'left';
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 38px Arial, sans-serif';
-            const trackName = track.name.length > 25 ? track.name.substring(0, 25) + '...' : track.name;
-            ctx.fillText(trackName, 180, y - 20);
-            
-            ctx.fillStyle = '#cccccc';
-            ctx.font = '32px Arial, sans-serif';
-            const artistName = track.artists[0]?.name || 'Unknown Artist';
-            const displayArtist = artistName.length > 30 ? artistName.substring(0, 30) + '...' : artistName;
-            ctx.fillText(displayArtist, 180, y + 20);
+    // Divider
+    y += 80;
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(200, y);
+    ctx.lineTo(880, y);
+    ctx.stroke();
+    y += 60;
+
+    // Top tracks
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '300 32px -apple-system, sans-serif';
+    ctx.fillText('TOP TRACKS', 120, y);
+    y += 50;
+
+    const tracksToShow = topTracks.slice(0, 4);
+    for (let i = 0; i < tracksToShow.length; i++) {
+      const track = tracksToShow[i];
+      y += 70;
+
+      // Number
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.font = 'bold 36px -apple-system, sans-serif';
+      ctx.fillText(`${i + 1}`, 120, y);
+
+      // Track name
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 40px -apple-system, sans-serif';
+      const trackName = track.name.length > 28 ? track.name.substring(0, 28) + '...' : track.name;
+      ctx.fillText(trackName, 190, y - 8);
+
+      // Artist
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '300 32px -apple-system, sans-serif';
+      const artist = track.artists[0]?.name || '';
+      ctx.fillText(artist.length > 35 ? artist.substring(0, 35) + '...' : artist, 190, y + 30);
+    }
+
+    // Bottom CTA
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '300 36px -apple-system, sans-serif';
+    ctx.fillText('what\'s your vibe?', canvas.width / 2, 1720);
+
+    ctx.fillStyle = '#1DB954';
+    ctx.font = 'bold 40px -apple-system, sans-serif';
+    ctx.fillText('vibecheck.style', canvas.width / 2, 1780);
+
+    setGeneratedImage(canvas.toDataURL('image/png'));
+  };
+
+  useEffect(() => {
+    generateStory();
+  }, []);
+
+  const downloadImage = () => {
+    if (!generatedImage) return;
+    const link = document.createElement('a');
+    link.download = `${user.display_name}_vibecheck.png`;
+    link.href = generatedImage;
+    link.click();
+  };
+
+  const shareImage = async () => {
+    if (!generatedImage) return;
+    try {
+      const res = await fetch(generatedImage);
+      const blob = await res.blob();
+      const file = new File([blob], `${user.display_name}_vibecheck.png`, { type: 'image/png' });
+      if (navigator.share && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: `${user.display_name}'s Vibecheck`,
+          text: `Check out ${user.display_name}'s music vibe!`,
+          files: [file],
         });
+      } else {
+        downloadImage();
+      }
+    } catch {
+      downloadImage();
+    }
+  };
 
-        // Add QR code placeholder (simplified as a square)
-        const qrSize = 200;
-        const qrX = canvas.width / 2 - qrSize / 2;
-        const qrY = 1400;
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(qrX, qrY, qrSize, qrSize);
-        
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 24px Arial, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('QR CODE', canvas.width / 2, qrY + qrSize / 2);
-        ctx.fillText('PLACEHOLDER', canvas.width / 2, qrY + qrSize / 2 + 30);
-
-        // Add URL
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 32px Arial, sans-serif';
-        ctx.fillText('vibecheck.style', canvas.width / 2, qrY + qrSize + 80);
-
-        // Add call to action
-        ctx.font = '36px Arial, sans-serif';
-        ctx.fillText('Check my vibe!', canvas.width / 2, qrY + qrSize + 130);
-
-        // Add decorative music notes
-        ctx.font = '60px Arial, sans-serif';
-        ctx.fillStyle = '#fbbf24';
-        ctx.fillText('♪', 150, 200);
-        ctx.fillText('♫', 850, 250);
-        ctx.fillText('♪', 950, 1300);
-        ctx.fillText('♫', 100, 1500);
-
-        // Convert canvas to image
-        const imageData = canvas.toDataURL('image/png');
-        setGeneratedImage(imageData);
-        setIsGenerating(false);
-    };
-
-    useEffect(() => {
-        generateStory();
-    }, []);
-
-    const downloadImage = () => {
-        if (!generatedImage) return;
-        
-        const link = document.createElement('a');
-        link.download = `${user.display_name}_vibecheck_story.png`;
-        link.href = generatedImage;
-        link.click();
-    };
-
-    const shareImage = async () => {
-        if (!generatedImage) return;
-
-        try {
-            // Convert data URL to blob
-            const response = await fetch(generatedImage);
-            const blob = await response.blob();
-            
-            // Create file from blob
-            const file = new File([blob], `${user.display_name}_vibecheck.png`, { type: 'image/png' });
-            
-            if (navigator.share && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    title: `${user.display_name}'s Vibecheck`,
-                    text: `Check out ${user.display_name}'s music vibe!`,
-                    files: [file]
-                });
-            } else {
-                // Fallback: copy to clipboard or download
-                downloadImage();
-            }
-        } catch (error) {
-            console.error('Error sharing image:', error);
-            downloadImage(); // Fallback to download
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-            <div className="bg-gradient-to-br from-purple-900 via-pink-900 to-orange-900 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-                
-                {/* Header */}
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold text-white">Instagram Story</h2>
-                    <button
-                        onClick={onClose}
-                        className="text-white/60 hover:text-white transition-colors"
-                    >
-                        <X className="h-6 w-6" />
-                    </button>
-                </div>
-
-                {/* Canvas (hidden) */}
-                <canvas
-                    ref={canvasRef}
-                    className="hidden"
-                />
-
-                {/* Generated Story Preview */}
-                {generatedImage ? (
-                    <div className="space-y-4">
-                        <div className="relative bg-black rounded-lg overflow-hidden aspect-[9/16]">
-                            <img
-                                src={generatedImage}
-                                alt="Generated story"
-                                className="w-full h-full object-cover"
-                            />
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex gap-3">
-                            <button
-                                onClick={shareImage}
-                                className="flex-1 bg-gradient-to-r from-pink-500 to-purple-500 text-white py-3 rounded-full font-semibold hover:from-pink-600 hover:to-purple-600 transition-all duration-300 flex items-center justify-center gap-2"
-                            >
-                                <Share className="h-4 w-4" />
-                                Share Story
-                            </button>
-                            <button
-                                onClick={downloadImage}
-                                className="flex-1 bg-gradient-to-r from-green-500 to-blue-500 text-white py-3 rounded-full font-semibold hover:from-green-600 hover:to-blue-600 transition-all duration-300 flex items-center justify-center gap-2"
-                            >
-                                <Download className="h-4 w-4" />
-                                Download
-                            </button>
-                        </div>
-
-                        <p className="text-white/60 text-sm text-center">
-                            Perfect for Instagram Stories! Share your vibe with friends.
-                        </p>
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-center justify-center py-12">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-yellow-400 mb-4"></div>
-                        <p className="text-white text-lg font-semibold mb-2">
-                            Creating your story...
-                        </p>
-                        <p className="text-white/60 text-sm text-center">
-                            ✨ Generating a beautiful visual for your vibe
-                        </p>
-                    </div>
-                )}
-            </div>
+  return (
+    <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+      <div className="bg-neutral-900 rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-white">Share Story</h2>
+          <button onClick={onClose} className="text-white/40 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
         </div>
-    );
+
+        <canvas ref={canvasRef} className="hidden" />
+
+        {generatedImage ? (
+          <div className="space-y-4">
+            <div className="rounded-lg overflow-hidden aspect-[9/16]">
+              <img src={generatedImage} alt="Story" className="w-full h-full object-cover" />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={shareImage}
+                className="flex-1 bg-[#1DB954] text-black py-3 rounded-full font-semibold hover:bg-[#1ed760] transition-colors"
+              >
+                Share
+              </button>
+              <button
+                onClick={downloadImage}
+                className="flex-1 bg-white/10 text-white py-3 rounded-full font-semibold hover:bg-white/20 transition-colors"
+              >
+                Download
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-white border-t-transparent" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

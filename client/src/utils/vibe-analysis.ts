@@ -44,11 +44,14 @@ export async function getAudioFeatures(trackIds: string[]): Promise<AudioFeature
         }
 
         const allFeatures: AudioFeatures[] = [];
-        
-        for (const batch of batches) {
-            const response = await spotifyApiGet(
-                `https://api.spotify.com/v1/audio-features?ids=${batch.join(',')}`
-            );
+
+        const promises = batches.map(batch =>
+            spotifyApiGet(`https://api.spotify.com/v1/audio-features?ids=${batch.join(',')}`)
+        );
+
+        const responses = await Promise.all(promises);
+
+        for (const response of responses) {
             if (response.audio_features) {
                 allFeatures.push(...response.audio_features.filter(Boolean));
             }
@@ -65,18 +68,18 @@ export async function getAudioFeatures(trackIds: string[]): Promise<AudioFeature
  * Creates a comprehensive vibe profile from user's tracks
  */
 export async function createVibeProfile(
-    userId: string, 
-    displayName: string, 
+    userId: string,
+    displayName: string,
     tracks: any[]
 ): Promise<VibeProfile> {
     console.log('🧠 Creating vibe profile for', displayName);
-    
+
     // Extract track IDs
     const trackIds = tracks.map(track => track.id).filter(Boolean);
-    
+
     // Get audio features
     const audioFeatures = await getAudioFeatures(trackIds);
-    
+
     // Combine tracks with their audio features
     const tracksWithFeatures: TrackWithFeatures[] = tracks.map((track, index) => ({
         id: track.id,
@@ -92,8 +95,8 @@ export async function createVibeProfile(
     );
 
     // Extract top genres
-    const genres = tracks.flatMap(track => 
-        track.artists.flatMap(artist => artist.genres || [])
+    const genres = tracks.flatMap(track =>
+        track.artists.flatMap((artist: any) => artist.genres || [])
     );
     const topGenres = getTopGenres(genres);
 
@@ -120,7 +123,7 @@ export async function createVibeProfile(
  * Calculates compatibility score between two vibe profiles
  */
 export function calculateCompatibilityScore(
-    profile1: VibeProfile, 
+    profile1: VibeProfile,
     profile2: VibeProfile
 ): number {
     console.log(`🤝 Calculating compatibility: ${profile1.displayName} ↔ ${profile2.displayName}`);
@@ -214,7 +217,7 @@ function calculateGenreSimilarity(genres1: string[], genres2: string[]): number 
 
     const set1 = new Set(genres1.map(g => g.toLowerCase()));
     const set2 = new Set(genres2.map(g => g.toLowerCase()));
-    
+
     const intersection = new Set([...set1].filter(x => set2.has(x)));
     const union = new Set([...set1, ...set2]);
 
@@ -227,7 +230,7 @@ function calculateGenreSimilarity(genres1: string[], genres2: string[]): number 
 function calculateTrackSimilarity(tracks1: TrackWithFeatures[], tracks2: TrackWithFeatures[]): number {
     const uris1 = new Set(tracks1.map(t => t.uri));
     const uris2 = new Set(tracks2.map(t => t.uri));
-    
+
     const commonTracks = [...uris1].filter(uri => uris2.has(uri)).length;
     const totalTracks = Math.max(tracks1.length, tracks2.length);
 
@@ -277,7 +280,7 @@ function calculateAverageFeatures(featuresArray: AudioFeatures[]): AudioFeatures
  */
 function getTopGenres(genres: string[]): string[] {
     const genreCounts: { [key: string]: number } = {};
-    
+
     genres.forEach(genre => {
         const normalizedGenre = genre.toLowerCase().trim();
         genreCounts[normalizedGenre] = (genreCounts[normalizedGenre] || 0) + 1;
