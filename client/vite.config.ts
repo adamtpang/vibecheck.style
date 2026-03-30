@@ -8,9 +8,6 @@ export default defineConfig({
     build: {
         minify: 'esbuild',
     },
-    esbuild: {
-        drop: ['console', 'debugger'],
-    },
     resolve: {
         alias: {
             "@": path.resolve(__dirname, "./src"),
