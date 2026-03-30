@@ -133,13 +133,9 @@ export async function spotifyApiRequest(
                 headers: retryHeaders,
             });
         } else {
-            // Refresh failed, clear all tokens and redirect to login
-            console.error('❌ Token refresh failed, clearing session');
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            localStorage.removeItem('token_expires_at');
-            localStorage.removeItem('user_data');
-            window.location.href = '/';
+            // Refresh failed — let the caller handle it
+            console.error('Token refresh failed, clearing session');
+            localStorage.clear();
             throw new Error('Authentication failed - please log in again');
         }
     }

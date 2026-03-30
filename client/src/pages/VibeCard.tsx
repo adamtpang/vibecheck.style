@@ -162,7 +162,16 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
       await saveVibe(data);
     } catch (err) {
       console.error('Generate vibe error:', err);
-      if (!background) setError('Failed to generate your vibe. Try again.');
+      if (!background) {
+        // If token is invalid, clear session and redirect to login
+        if (String(err).includes('Authentication failed') || String(err).includes('No valid access token')) {
+          localStorage.clear();
+          setUser(null);
+          navigate('/');
+          return;
+        }
+        setError('Failed to generate your vibe. Try refreshing.');
+      }
     } finally {
       setGenerating(false);
       setLoading(false);

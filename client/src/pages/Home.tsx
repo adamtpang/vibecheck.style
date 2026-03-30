@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User } from '../App';
 
@@ -32,10 +32,13 @@ export default function Home({ user }: HomeProps) {
   const navigate = useNavigate();
 
   // If logged in, go to their vibe card
-  if (user) {
-    navigate(`/${user.id}`, { replace: true });
-    return null;
-  }
+  useEffect(() => {
+    if (user) {
+      navigate(`/${user.id}`, { replace: true });
+    }
+  }, [user, navigate]);
+
+  if (user) return null;
 
   const handleLogin = async () => {
     setLoading(true);
