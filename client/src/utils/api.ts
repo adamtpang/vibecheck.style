@@ -71,9 +71,15 @@ export async function getVibe(spotifyId: string): Promise<VibeData | null> {
   return res.json();
 }
 
+export interface VibeLabelCount {
+  label: string;
+  count: number;
+}
+
 export interface UsersResponse {
   users: VibeSummary[];
   total: number;
+  topLabels: VibeLabelCount[];
 }
 
 export async function getUsers(opts: { limit?: number; offset?: number } = {}): Promise<UsersResponse> {
@@ -84,5 +90,9 @@ export async function getUsers(opts: { limit?: number; offset?: number } = {}): 
   const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch users');
   const data = await res.json();
-  return { users: data.users || [], total: data.total ?? (data.users?.length ?? 0) };
+  return {
+    users: data.users || [],
+    total: data.total ?? (data.users?.length ?? 0),
+    topLabels: data.topLabels || [],
+  };
 }

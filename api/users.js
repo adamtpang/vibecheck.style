@@ -40,7 +40,23 @@ export default async function handler(req, res) {
       WHERE vibe_label IS NOT NULL AND is_public = true
     `;
 
-    res.json({ users: rows, limit, offset, total: stats?.total ?? rows.length });
+    // Top vibe labels — drives the "X people are on this vibe" chip row.
+    const topLabels = await sql`
+      SELECT vibe_label AS label, COUNT(*)::int AS count
+      FROM users
+      WHERE vibe_label IS NOT NULL AND is_public = true
+      GROUP BY vibe_label
+      ORDER BY count DESC, vibe_label ASC
+      LIMIT 5
+    `;
+
+    res.json({
+      users: rows,
+      limit,
+      offset,
+      total: stats?.total ?? rows.length,
+      topLabels,
+    });
   } catch (err) {
     console.error('Error fetching users:', err);
     res.status(500).json({ error: 'Failed to fetch users' });

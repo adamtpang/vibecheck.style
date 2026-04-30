@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { User } from '../App';
 import { getUsers, getVibe } from '../utils/api';
-import type { VibeSummary } from '../utils/api';
+import type { VibeSummary, VibeLabelCount } from '../utils/api';
 import { calculateLightCompatibility } from '../utils/vibe-analysis';
 import { getContrastTextColor, getSubtleTextColor } from '../utils/vibe-colors';
 
@@ -15,6 +15,7 @@ type SortMode = 'recent' | 'match';
 export default function Explore({ currentUser }: ExploreProps) {
   const [users, setUsers] = useState<VibeSummary[]>([]);
   const [total, setTotal] = useState<number>(0);
+  const [topLabels, setTopLabels] = useState<VibeLabelCount[]>([]);
   const [me, setMe] = useState<VibeSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +34,7 @@ export default function Explore({ currentUser }: ExploreProps) {
         if (cancelled) return;
         setUsers(res.users);
         setTotal(res.total);
+        setTopLabels(res.topLabels);
         // Adapt VibeData → the subset that matches VibeSummary
         if (mine) {
           setMe({
@@ -112,6 +114,28 @@ export default function Explore({ currentUser }: ExploreProps) {
             <span className="text-white/70 text-xs font-medium">
               {total.toLocaleString()} {total === 1 ? 'vibe' : 'vibes'} generated
             </span>
+          </div>
+        )}
+
+        {/* Top vibe labels — social proof */}
+        {!loading && topLabels.length > 0 && (
+          <div className="mb-8">
+            <p className="text-white/40 text-xs uppercase tracking-widest mb-3">
+              what people are vibing on
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {topLabels.map(({ label, count }) => (
+                <div
+                  key={label}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10"
+                >
+                  <span className="text-white text-sm font-medium">{label}</span>
+                  <span className="text-white/40 text-xs">
+                    {count.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
