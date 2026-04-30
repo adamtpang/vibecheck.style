@@ -5,7 +5,7 @@ import { spotifyApiGet, spotifyApiPost, SpotifyApiError } from '../utils/spotify
 import { createVibeProfile, calculateLightCompatibility } from '../utils/vibe-analysis';
 import { getVibeLabel } from '../utils/vibe-labels';
 import { getVibeGradient, getContrastTextColor, getSubtleTextColor } from '../utils/vibe-colors';
-import { saveVibe, getVibe } from '../utils/api';
+import { saveVibe, getVibe, updatePrivacy } from '../utils/api';
 import type { VibeData } from '../utils/api';
 import StoryGenerator from '../components/StoryGenerator';
 
@@ -24,8 +24,12 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   const [showStory, setShowStory] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [playlistError, setPlaylistError] = useState(false);
+  const [savingPrivacy, setSavingPrivacy] = useState(false);
 
   const isOwner = currentUser?.id === userId;
+  // Treat undefined is_public as public — pre-migration rows lack the field.
+  const isPrivate = vibeData?.is_public === false;
 
   useEffect(() => {
     loadVibe();
@@ -146,6 +150,7 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
 
       // Create Spotify playlist
       let playlistId = currentUser.playlistId;
+      setPlaylistError(false);
       try {
         const playlist = await spotifyApiPost(
           `https://api.spotify.com/v1/users/${currentUser.id}/playlists`,
@@ -162,6 +167,7 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
         await spotifyApiPost(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, { uris });
       } catch (err) {
         console.error('Playlist creation failed:', err);
+        setPlaylistError(true);
       }
 
       // Top 5 tracks for display (with album art)
@@ -231,6 +237,22 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function handleTogglePrivacy() {
+    if (!vibeData || !currentUser || savingPrivacy) return;
+    const next = isPrivate; // current is private → make public, and vice-versa
+    setSavingPrivacy(true);
+    // Optimistic update — flip the local state immediately, revert on error.
+    setVibeData({ ...vibeData, is_public: next });
+    try {
+      await updatePrivacy(currentUser.id, currentUser.display_name, next);
+    } catch (err) {
+      console.error('Privacy update failed:', err);
+      setVibeData({ ...vibeData, is_public: !next });
+    } finally {
+      setSavingPrivacy(false);
+    }
+  }
+
   function handleLogout() {
     localStorage.clear();
     setUser(null);
@@ -264,6 +286,27 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   }
 
   if (!vibeData) return null;
+
+  // --- Private profile gate (visitor view only) ---
+  if (!isOwner && isPrivate) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center px-6">
+        <div className="text-center max-w-md">
+          <div className="text-5xl mb-4">🔒</div>
+          <h1 className="text-3xl font-bold text-white mb-2">private vibe</h1>
+          <p className="text-white/50 text-lg mb-8">
+            this person hasn't made their vibe discoverable.
+          </p>
+          <Link
+            to={currentUser ? `/${currentUser.id}` : '/'}
+            className="inline-block bg-[#1DB954] text-black px-8 py-3 rounded-full font-semibold hover:bg-[#1ed760] transition-colors"
+          >
+            {currentUser ? 'Back to My Vibe' : 'Create Your Own'}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // --- Parse data ---
   const features = vibeData.average_features || {};
@@ -426,6 +469,21 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
           </div>
         )}
 
+        {/* Playlist failure notice (owner only) */}
+        {isOwner && playlistError && !vibeData.playlist_id && (
+          <div
+            className="mb-10 px-4 py-3 rounded-xl text-sm"
+            style={{
+              background: `${textColor}10`,
+              border: `1px solid ${textColor}30`,
+              color: textColor,
+            }}
+          >
+            We couldn't create your Spotify playlist this time — your vibe is
+            saved though. Hit "Refresh Vibe" to retry.
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex flex-col gap-3">
           <button
@@ -461,23 +519,34 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
           </div>
 
           {isOwner && (
-            <div className="flex gap-3 mt-2">
-              <button
-                onClick={() => generateVibe(false)}
-                disabled={generating}
-                className="flex-1 py-2 rounded-full text-sm font-medium border transition-all duration-200 disabled:opacity-50"
-                style={{ borderColor: `${textColor}20`, color: subtleColor }}
-              >
-                {generating ? 'Refreshing...' : 'Refresh Vibe'}
-              </button>
-              <button
-                onClick={handleLogout}
-                className="py-2 px-4 rounded-full text-sm font-medium transition-all duration-200"
-                style={{ color: subtleColor }}
-              >
-                Logout
-              </button>
-            </div>
+            <>
+              <div className="flex gap-3 mt-2">
+                <button
+                  onClick={() => generateVibe(false)}
+                  disabled={generating}
+                  className="flex-1 py-2 rounded-full text-sm font-medium border transition-all duration-200 disabled:opacity-50"
+                  style={{ borderColor: `${textColor}20`, color: subtleColor }}
+                >
+                  {generating ? 'Refreshing...' : 'Refresh Vibe'}
+                </button>
+                <button
+                  onClick={handleTogglePrivacy}
+                  disabled={savingPrivacy}
+                  className="py-2 px-4 rounded-full text-sm font-medium border transition-all duration-200 disabled:opacity-50"
+                  style={{ borderColor: `${textColor}20`, color: subtleColor }}
+                  title={isPrivate ? 'Currently hidden from /explore' : 'Currently visible in /explore'}
+                >
+                  {savingPrivacy ? '...' : isPrivate ? '🔒 Private' : '🌍 Public'}
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="py-2 px-4 rounded-full text-sm font-medium transition-all duration-200"
+                  style={{ color: subtleColor }}
+                >
+                  Logout
+                </button>
+              </div>
+            </>
           )}
 
           {!isOwner && (

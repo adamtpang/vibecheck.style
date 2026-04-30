@@ -20,14 +20,16 @@ export default async function handler(req, res) {
 
   // Fetch minimal data needed for tags. Don't block on DB errors — degrade
   // to a generic preview rather than 500ing the share link.
+  // Private profiles also fall back to the generic preview so we don't
+  // leak personalized data into share metadata.
   let user = null;
   try {
     const sql = neon(process.env.DATABASE_URL);
     const rows = await sql`
-      SELECT display_name, vibe_label
+      SELECT display_name, vibe_label, is_public
       FROM users WHERE spotify_id = ${spotifyId}
     `;
-    if (rows.length > 0) user = rows[0];
+    if (rows.length > 0 && rows[0].is_public !== false) user = rows[0];
   } catch (err) {
     console.error('Share-tag DB fetch failed:', err);
   }

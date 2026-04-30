@@ -19,6 +19,7 @@ export default async function handler(req, res) {
     const sql = neon(process.env.DATABASE_URL);
     // Only return fields needed for the explore grid + compatibility math.
     // Skip top_tracks (heavier, lazy-load on profile page).
+    // Filter out private profiles (is_public = false).
     const rows = await sql`
       SELECT spotify_id, display_name, avatar_url,
              vibe_label, vibe_gradient,
@@ -26,10 +27,20 @@ export default async function handler(req, res) {
              updated_at
       FROM users
       WHERE vibe_label IS NOT NULL
+        AND is_public = true
       ORDER BY updated_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
-    res.json({ users: rows, limit, offset });
+
+    // Cheap stats query for the explore banner. Kept in this endpoint to
+    // avoid an extra round-trip from the client.
+    const [stats] = await sql`
+      SELECT COUNT(*)::int AS total
+      FROM users
+      WHERE vibe_label IS NOT NULL AND is_public = true
+    `;
+
+    res.json({ users: rows, limit, offset, total: stats?.total ?? rows.length });
   } catch (err) {
     console.error('Error fetching users:', err);
     res.status(500).json({ error: 'Failed to fetch users' });

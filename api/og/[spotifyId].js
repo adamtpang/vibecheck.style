@@ -19,12 +19,13 @@ export default async function handler(req) {
 
     const sql = neon(process.env.DATABASE_URL);
     const rows = await sql`
-      SELECT display_name, vibe_label, vibe_gradient, top_genres, average_features
+      SELECT display_name, vibe_label, vibe_gradient, top_genres, average_features, is_public
       FROM users WHERE spotify_id = ${spotifyId}
     `;
 
-    if (rows.length === 0) {
-      // Render a generic fallback card so the share preview never breaks.
+    // Render a generic fallback card if not found OR private — share preview
+    // never breaks, but we don't leak vibe data for opted-out users.
+    if (rows.length === 0 || rows[0].is_public === false) {
       return renderCard({
         display_name: 'vibecheck',
         vibe_label: 'what does your music say about you?',

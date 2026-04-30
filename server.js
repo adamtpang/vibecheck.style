@@ -31,25 +31,44 @@ app.post('/api/vibe', async (req, res) => {
     average_features,
     top_tracks,
     top_genres,
+    is_public,
   } = req.body;
 
   if (!spotify_id || !display_name) {
     return res.status(400).json({ error: 'spotify_id and display_name required' });
   }
 
+  const explicitPublic = typeof is_public === 'boolean';
+
   try {
-    await sql`INSERT INTO users (spotify_id, display_name, avatar_url, playlist_id, vibe_label, vibe_gradient, average_features, top_tracks, top_genres, updated_at)
-       VALUES (${spotify_id}, ${display_name}, ${avatar_url}, ${playlist_id}, ${vibe_label}, ${vibe_gradient}, ${JSON.stringify(average_features)}, ${JSON.stringify(top_tracks)}, ${JSON.stringify(top_genres)}, NOW())
-       ON CONFLICT (spotify_id) DO UPDATE SET
-         display_name = ${display_name},
-         avatar_url = ${avatar_url},
-         playlist_id = ${playlist_id},
-         vibe_label = ${vibe_label},
-         vibe_gradient = ${vibe_gradient},
-         average_features = ${JSON.stringify(average_features)},
-         top_tracks = ${JSON.stringify(top_tracks)},
-         top_genres = ${JSON.stringify(top_genres)},
-         updated_at = NOW()`;
+    if (explicitPublic) {
+      await sql`INSERT INTO users (spotify_id, display_name, avatar_url, playlist_id, vibe_label, vibe_gradient, average_features, top_tracks, top_genres, is_public, updated_at)
+         VALUES (${spotify_id}, ${display_name}, ${avatar_url}, ${playlist_id}, ${vibe_label}, ${vibe_gradient}, ${JSON.stringify(average_features)}, ${JSON.stringify(top_tracks)}, ${JSON.stringify(top_genres)}, ${is_public}, NOW())
+         ON CONFLICT (spotify_id) DO UPDATE SET
+           display_name = ${display_name},
+           avatar_url = ${avatar_url},
+           playlist_id = ${playlist_id},
+           vibe_label = ${vibe_label},
+           vibe_gradient = ${vibe_gradient},
+           average_features = ${JSON.stringify(average_features)},
+           top_tracks = ${JSON.stringify(top_tracks)},
+           top_genres = ${JSON.stringify(top_genres)},
+           is_public = ${is_public},
+           updated_at = NOW()`;
+    } else {
+      await sql`INSERT INTO users (spotify_id, display_name, avatar_url, playlist_id, vibe_label, vibe_gradient, average_features, top_tracks, top_genres, updated_at)
+         VALUES (${spotify_id}, ${display_name}, ${avatar_url}, ${playlist_id}, ${vibe_label}, ${vibe_gradient}, ${JSON.stringify(average_features)}, ${JSON.stringify(top_tracks)}, ${JSON.stringify(top_genres)}, NOW())
+         ON CONFLICT (spotify_id) DO UPDATE SET
+           display_name = ${display_name},
+           avatar_url = ${avatar_url},
+           playlist_id = ${playlist_id},
+           vibe_label = ${vibe_label},
+           vibe_gradient = ${vibe_gradient},
+           average_features = ${JSON.stringify(average_features)},
+           top_tracks = ${JSON.stringify(top_tracks)},
+           top_genres = ${JSON.stringify(top_genres)},
+           updated_at = NOW()`;
+    }
     res.json({ success: true });
   } catch (err) {
     console.error('Error saving vibe:', err);
@@ -71,10 +90,16 @@ app.get('/api/users', async (req, res) => {
              updated_at
       FROM users
       WHERE vibe_label IS NOT NULL
+        AND is_public = true
       ORDER BY updated_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
-    res.json({ users: rows, limit, offset });
+    const [stats] = await sql`
+      SELECT COUNT(*)::int AS total
+      FROM users
+      WHERE vibe_label IS NOT NULL AND is_public = true
+    `;
+    res.json({ users: rows, limit, offset, total: stats?.total ?? rows.length });
   } catch (err) {
     console.error('Error fetching users:', err);
     res.status(500).json({ error: 'Failed to fetch users' });

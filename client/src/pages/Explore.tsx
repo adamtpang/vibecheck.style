@@ -14,6 +14,7 @@ type SortMode = 'recent' | 'match';
 
 export default function Explore({ currentUser }: ExploreProps) {
   const [users, setUsers] = useState<VibeSummary[]>([]);
+  const [total, setTotal] = useState<number>(0);
   const [me, setMe] = useState<VibeSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,9 +29,10 @@ export default function Explore({ currentUser }: ExploreProps) {
       getUsers({ limit: 60 }),
       currentUser ? getVibe(currentUser.id) : Promise.resolve(null),
     ])
-      .then(([list, mine]) => {
+      .then(([res, mine]) => {
         if (cancelled) return;
-        setUsers(list);
+        setUsers(res.users);
+        setTotal(res.total);
         // Adapt VibeData → the subset that matches VibeSummary
         if (mine) {
           setMe({
@@ -102,6 +104,16 @@ export default function Explore({ currentUser }: ExploreProps) {
             {currentUser ? 'my vibe →' : 'home →'}
           </Link>
         </div>
+
+        {/* Stats badge */}
+        {!loading && total > 0 && (
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-6 rounded-full bg-white/5 border border-white/10">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-white/70 text-xs font-medium">
+              {total.toLocaleString()} {total === 1 ? 'vibe' : 'vibes'} generated
+            </span>
+          </div>
+        )}
 
         {/* Sort toggle (only when logged-in) */}
         {currentUser && (
