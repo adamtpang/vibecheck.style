@@ -5,8 +5,8 @@ import { spotifyApiGet, spotifyApiPost, SpotifyApiError } from '../utils/spotify
 import { createVibeProfile, calculateLightCompatibility } from '../utils/vibe-analysis';
 import { getVibeLabel } from '../utils/vibe-labels';
 import { getVibeGradient, getContrastTextColor, getSubtleTextColor } from '../utils/vibe-colors';
-import { saveVibe, getVibe, updatePrivacy } from '../utils/api';
-import type { VibeData } from '../utils/api';
+import { saveVibe, getVibe, getUsers, updatePrivacy } from '../utils/api';
+import type { VibeData, VibeSummary } from '../utils/api';
 import StoryGenerator from '../components/StoryGenerator';
 
 interface VibeCardProps {
@@ -26,6 +26,7 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   const [error, setError] = useState<string | null>(null);
   const [playlistError, setPlaylistError] = useState(false);
   const [savingPrivacy, setSavingPrivacy] = useState(false);
+  const [twins, setTwins] = useState<Array<{ user: VibeSummary; score: number }>>([]);
 
   const isOwner = currentUser?.id === userId;
   // Treat undefined is_public as public — pre-migration rows lack the field.
@@ -66,6 +67,39 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
       }
     );
   }, [viewerVibe, vibeData]);
+
+  // Vibe twins: top 3 most-compatible public users for the owner's view.
+  // Skipped for visitors — the compat panel above already serves that role.
+  useEffect(() => {
+    if (!isOwner || !vibeData?.average_features) return;
+    let cancelled = false;
+    getUsers({ limit: 100 })
+      .then(({ users }) => {
+        if (cancelled) return;
+        const ranked = users
+          .filter(u => u.spotify_id !== userId && u.average_features)
+          .map(u => ({
+            user: u,
+            score: calculateLightCompatibility(
+              {
+                averageFeatures: vibeData.average_features as any,
+                topGenres: vibeData.top_genres || [],
+              },
+              {
+                averageFeatures: u.average_features as any,
+                topGenres: u.top_genres || [],
+              }
+            ),
+          }))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 3);
+        setTwins(ranked);
+      })
+      .catch(err => console.error('Vibe twins fetch failed:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [isOwner, userId, vibeData?.average_features, vibeData?.top_genres]);
 
   async function loadVibe() {
     if (!userId) return;
@@ -481,6 +515,53 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
           >
             We couldn't create your Spotify playlist this time — your vibe is
             saved though. Hit "Refresh Vibe" to retry.
+          </div>
+        )}
+
+        {/* Vibe Twins (owner only) — your most-compatible public users */}
+        {isOwner && twins.length > 0 && (
+          <div className="mb-10">
+            <div className="flex items-baseline justify-between mb-4">
+              <h2 className="text-sm uppercase tracking-widest" style={{ color: subtleColor }}>
+                Your Vibe Twins
+              </h2>
+              <Link
+                to="/explore"
+                className="text-xs font-medium hover:underline"
+                style={{ color: subtleColor }}
+              >
+                see all →
+              </Link>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {twins.map(({ user, score }) => (
+                <Link
+                  key={user.spotify_id}
+                  to={`/${user.spotify_id}`}
+                  className="block rounded-xl overflow-hidden aspect-[3/4] relative transition-transform hover:scale-[1.03]"
+                  style={{ background: user.vibe_gradient || gradient }}
+                >
+                  <div
+                    className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-md"
+                    style={{
+                      background: 'rgba(0,0,0,0.4)',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.25)',
+                    }}
+                  >
+                    {score}%
+                  </div>
+                  <div className="absolute inset-0 p-3 flex flex-col justify-end">
+                    <p className="text-white text-xs font-semibold truncate drop-shadow">
+                      {user.display_name}
+                    </p>
+                    <p className="text-white/80 text-[11px] truncate drop-shadow">
+                      {user.vibe_label}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
 
