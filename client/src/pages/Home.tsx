@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { User } from '../App';
+import Footer from '../components/Footer';
 
 interface HomeProps {
   user: User | null;
@@ -123,6 +124,8 @@ export default function Home({ user }: HomeProps) {
         <p className="text-white/20 text-xs mt-12">
           vibecheck.style
         </p>
+
+        <Footer />
       </div>
     </div>
   );

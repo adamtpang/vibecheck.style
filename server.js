@@ -134,6 +134,28 @@ app.get('/api/vibe/:spotifyId', async (req, res) => {
   }
 });
 
+// Delete a user's vibe. Caller must prove ownership by handing back a valid
+// Spotify access token whose me.id matches the path.
+app.delete('/api/vibe/:spotifyId', async (req, res) => {
+  const { spotifyId } = req.params;
+  const auth = req.headers.authorization || '';
+  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return res.status(401).json({ error: 'Missing Spotify access token' });
+  try {
+    const meRes = await fetch('https://api.spotify.com/v1/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!meRes.ok) return res.status(401).json({ error: 'Spotify token rejected' });
+    const me = await meRes.json();
+    if (me.id !== spotifyId) return res.status(403).json({ error: 'Token does not match target user' });
+    await sql`DELETE FROM users WHERE spotify_id = ${spotifyId}`;
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting vibe:', err);
+    res.status(500).json({ error: 'Failed to delete vibe' });
+  }
+});
+
 // Serve static files in production
 app.use(express.static(path.join(__dirname, 'client', 'dist')));
 app.get('*', (req, res) => {

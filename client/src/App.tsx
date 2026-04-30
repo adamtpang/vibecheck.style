@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import Home from './pages/Home';
 import VibeCard from './pages/VibeCard';
 import Explore from './pages/Explore';
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
 import './index.css';
 
 export interface User {
@@ -119,6 +121,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home user={user} />} />
         <Route path="/explore" element={<Explore currentUser={user} />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
         <Route path="/:userId" element={<VibeCard currentUser={user} setUser={setUser} />} />
       </Routes>
     </Router>

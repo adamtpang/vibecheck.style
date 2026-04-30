@@ -5,6 +5,7 @@ import { getUsers, getVibe } from '../utils/api';
 import type { VibeSummary, VibeLabelCount } from '../utils/api';
 import { calculateLightCompatibility } from '../utils/vibe-analysis';
 import { getContrastTextColor, getSubtleTextColor } from '../utils/vibe-colors';
+import Footer from '../components/Footer';
 
 interface ExploreProps {
   currentUser: User | null;
@@ -169,6 +170,8 @@ export default function Explore({ currentUser }: ExploreProps) {
             ))}
           </div>
         )}
+
+        <Footer />
       </div>
     </div>
   );

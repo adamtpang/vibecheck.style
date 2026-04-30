@@ -5,9 +5,10 @@ import { spotifyApiGet, spotifyApiPost, SpotifyApiError } from '../utils/spotify
 import { createVibeProfile, calculateLightCompatibility } from '../utils/vibe-analysis';
 import { getVibeLabel } from '../utils/vibe-labels';
 import { getVibeGradient, getContrastTextColor, getSubtleTextColor } from '../utils/vibe-colors';
-import { saveVibe, getVibe, getUsers, updatePrivacy } from '../utils/api';
+import { saveVibe, getVibe, getUsers, updatePrivacy, deleteVibe } from '../utils/api';
 import type { VibeData, VibeSummary } from '../utils/api';
 import StoryGenerator from '../components/StoryGenerator';
+import Footer from '../components/Footer';
 
 interface VibeCardProps {
   currentUser: User | null;
@@ -27,6 +28,8 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   const [playlistError, setPlaylistError] = useState(false);
   const [savingPrivacy, setSavingPrivacy] = useState(false);
   const [twins, setTwins] = useState<Array<{ user: VibeSummary; score: number }>>([]);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isOwner = currentUser?.id === userId;
   // Treat undefined is_public as public — pre-migration rows lack the field.
@@ -291,6 +294,23 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
     localStorage.clear();
     setUser(null);
     navigate('/');
+  }
+
+  async function handleDelete() {
+    if (!currentUser || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteVibe(currentUser.id);
+      // Wipe local session too — there's no profile left to come back to.
+      localStorage.clear();
+      setUser(null);
+      navigate('/');
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert('Failed to delete your vibe. Please try again or email adamtpang@gmail.com.');
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
   }
 
   // --- Loading State ---
@@ -658,11 +678,61 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
               Explore Other Vibes
             </Link>
           )}
+
+          {/* Danger zone — owner-only, intentionally low-emphasis */}
+          {isOwner && (
+            <div className="mt-6 pt-6 border-t" style={{ borderColor: `${textColor}15` }}>
+              {!confirmDelete ? (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="w-full py-2 rounded-full text-xs font-medium transition-colors"
+                  style={{ color: `${textColor}40` }}
+                >
+                  Delete my vibe
+                </button>
+              ) : (
+                <div
+                  className="px-4 py-4 rounded-2xl text-center"
+                  style={{
+                    background: `${textColor}08`,
+                    border: `1px solid ${textColor}20`,
+                  }}
+                >
+                  <p className="text-sm mb-3" style={{ color: textColor }}>
+                    This permanently removes your vibe from our database.
+                  </p>
+                  <p className="text-xs mb-4" style={{ color: subtleColor }}>
+                    Your Spotify account isn't affected — you can always come
+                    back and generate a new one.
+                  </p>
+                  <div className="flex gap-2 justify-center">
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="px-4 py-2 rounded-full text-xs font-semibold bg-red-500/80 text-white hover:bg-red-500 transition-colors disabled:opacity-50"
+                    >
+                      {deleting ? 'Deleting...' : 'Yes, delete it'}
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      disabled={deleting}
+                      className="px-4 py-2 rounded-full text-xs font-medium border disabled:opacity-50"
+                      style={{ borderColor: `${textColor}30`, color: textColor }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <p className="text-center mt-8 text-xs" style={{ color: `${textColor}30` }}>
           vibecheck.style
         </p>
+
+        <Footer textColor={textColor} />
       </div>
 
       {/* Story Generator */}

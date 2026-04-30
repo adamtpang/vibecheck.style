@@ -71,6 +71,24 @@ export async function getVibe(spotifyId: string): Promise<VibeData | null> {
   return res.json();
 }
 
+/**
+ * Permanently deletes the caller's vibe data. Authenticates ownership by
+ * handing the current Spotify access token to the server, which validates
+ * it against /v1/me and confirms id parity before issuing the DELETE.
+ */
+export async function deleteVibe(spotifyId: string): Promise<void> {
+  const token = localStorage.getItem('access_token');
+  if (!token) throw new Error('Not signed in');
+  const res = await fetch(`${API_BASE}/api/vibe/${encodeURIComponent(spotifyId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to delete vibe');
+  }
+}
+
 export interface VibeLabelCount {
   label: string;
   count: number;
