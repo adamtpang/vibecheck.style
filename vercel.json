@@ -15,7 +15,19 @@
       "destination": "/api/users"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/api/og/:spotifyId",
+      "destination": "/api/og/[spotifyId]"
+    },
+    {
+      "source": "/api/share/:spotifyId",
+      "destination": "/api/share/[spotifyId]"
+    },
+    {
+      "source": "/share/:spotifyId",
+      "destination": "/api/share/[spotifyId]"
+    },
+    {
+      "source": "/((?!api/|share/).*)",
       "destination": "/"
     }
   ]

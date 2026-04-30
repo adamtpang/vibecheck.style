@@ -222,7 +222,10 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   }
 
   function handleShare() {
-    const url = `${window.location.origin}/${userId}`;
+    // Copy the /share/:id URL so social platforms (Twitter/Discord/iMessage)
+    // hit the OG-tagged HTML and render a per-user preview. Humans get
+    // redirected to /:id transparently.
+    const url = `${window.location.origin}/share/${userId}`;
     navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
