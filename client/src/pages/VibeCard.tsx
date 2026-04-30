@@ -428,8 +428,9 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
 
         {/* Compatibility (only when logged-in viewer is looking at someone else) */}
         {!isOwner && currentUser && compatibilityScore != null && (
-          <div
-            className="mb-10 rounded-2xl p-5 text-center"
+          <Link
+            to={`/compare/${currentUser.id}/${userId}`}
+            className="block mb-10 rounded-2xl p-5 text-center transition-transform hover:scale-[1.01]"
             style={{
               background: `${textColor}10`,
               border: `1px solid ${textColor}20`,
@@ -441,7 +442,7 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
             <p className="text-5xl font-bold mb-1" style={{ color: textColor }}>
               {compatibilityScore}%
             </p>
-            <p className="text-sm" style={{ color: subtleColor }}>
+            <p className="text-sm mb-2" style={{ color: subtleColor }}>
               {compatibilityScore >= 85
                 ? 'you two are basically the same person'
                 : compatibilityScore >= 70
@@ -450,7 +451,10 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
                 ? 'some shared territory'
                 : 'opposites attract'}
             </p>
-          </div>
+            <p className="text-xs font-medium" style={{ color: textColor }}>
+              see full breakdown →
+            </p>
+          </Link>
         )}
 
         {/* Mood Meters */}

@@ -324,6 +324,57 @@ export function calculateLightCompatibility(
 }
 
 /**
+ * Detailed compatibility breakdown for the /compare view. Returns the
+ * underlying similarities so the UI can highlight what specifically
+ * matches between two listeners.
+ */
+export interface CompatBreakdown {
+    score: number;
+    audio: number;        // 0..100
+    genre: number;        // 0..100
+    sharedGenres: string[];
+    /** Per-feature deltas in 0..1 space, useful for "you both run hot on energy" copy */
+    featureDeltas: {
+        energy: number;
+        valence: number;
+        danceability: number;
+        acousticness: number;
+        instrumentalness: number;
+    };
+}
+
+export function calculateCompatBreakdown(
+    a: { averageFeatures: AudioFeatures; topGenres: string[] },
+    b: { averageFeatures: AudioFeatures; topGenres: string[] }
+): CompatBreakdown {
+    const audio = calculateCosineSimilarity(a.averageFeatures, b.averageFeatures);
+    const genre = calculateGenreSimilarity(a.topGenres, b.topGenres);
+    const score = Math.round((audio * 0.78 + genre * 0.22) * 100);
+
+    const setA = new Set((a.topGenres || []).map(g => g.toLowerCase()));
+    const setB = new Set((b.topGenres || []).map(g => g.toLowerCase()));
+    const sharedGenres = [...setA].filter(g => setB.has(g));
+
+    const fa = a.averageFeatures;
+    const fb = b.averageFeatures;
+    const featureDeltas = {
+        energy: Math.abs(fa.energy - fb.energy),
+        valence: Math.abs(fa.valence - fb.valence),
+        danceability: Math.abs(fa.danceability - fb.danceability),
+        acousticness: Math.abs(fa.acousticness - fb.acousticness),
+        instrumentalness: Math.abs(fa.instrumentalness - fb.instrumentalness),
+    };
+
+    return {
+        score,
+        audio: Math.round(audio * 100),
+        genre: Math.round(genre * 100),
+        sharedGenres,
+        featureDeltas,
+    };
+}
+
+/**
  * Mock function to simulate finding users with compatible vibes
  */
 export function findCompatibleUsers(userProfile: VibeProfile, allProfiles: VibeProfile[]): Array<{
