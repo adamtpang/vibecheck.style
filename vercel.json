@@ -11,6 +11,10 @@
       "destination": "/api/vibe"
     },
     {
+      "source": "/api/users",
+      "destination": "/api/users"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/"
     }

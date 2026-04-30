@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { User } from '../App';
 
 interface HomeProps {
@@ -94,6 +94,15 @@ export default function Home({ user }: HomeProps) {
             </span>
           )}
         </button>
+
+        <div className="mt-6">
+          <Link
+            to="/explore"
+            className="text-white/40 hover:text-white/80 text-sm font-medium transition-colors"
+          >
+            or explore other vibes →
+          </Link>
+        </div>
 
         {/* How it works */}
         <div className="mt-16 grid grid-cols-3 gap-6 text-center">

@@ -57,6 +57,30 @@ app.post('/api/vibe', async (req, res) => {
   }
 });
 
+// List recent users for the /explore directory.
+// Mirrors api/users.js (Vercel serverless) so dev and prod stay in sync.
+app.get('/api/users', async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit ?? '50', 10) || 50, 1), 100);
+  const offset = Math.max(parseInt(req.query.offset ?? '0', 10) || 0, 0);
+
+  try {
+    const rows = await sql`
+      SELECT spotify_id, display_name, avatar_url,
+             vibe_label, vibe_gradient,
+             average_features, top_genres,
+             updated_at
+      FROM users
+      WHERE vibe_label IS NOT NULL
+      ORDER BY updated_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+    res.json({ users: rows, limit, offset });
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
 // Get a user's vibe by spotify ID
 app.get('/api/vibe/:spotifyId', async (req, res) => {
   try {

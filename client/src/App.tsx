@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import Home from './pages/Home';
 import VibeCard from './pages/VibeCard';
+import Explore from './pages/Explore';
 import './index.css';
 
 export interface User {
@@ -117,6 +118,7 @@ export default function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Home user={user} />} />
+        <Route path="/explore" element={<Explore currentUser={user} />} />
         <Route path="/:userId" element={<VibeCard currentUser={user} setUser={setUser} />} />
       </Routes>
     </Router>

@@ -143,12 +143,28 @@ export async function spotifyApiRequest(
     return response;
 }
 
+export class SpotifyApiError extends Error {
+    constructor(public status: number, public endpoint: string, public spotifyMessage: string) {
+        super(`Spotify ${status} on ${endpoint}: ${spotifyMessage}`);
+        this.name = 'SpotifyApiError';
+    }
+}
+
+async function parseOrThrow(response: Response, url: string): Promise<any> {
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const message = data?.error?.message || response.statusText || 'Unknown error';
+        throw new SpotifyApiError(response.status, new URL(url).pathname, message);
+    }
+    return data;
+}
+
 /**
  * Convenience method for making Spotify API GET requests
  */
 export async function spotifyApiGet(url: string): Promise<any> {
     const response = await spotifyApiRequest(url);
-    return response.json();
+    return parseOrThrow(response, url);
 }
 
 /**
@@ -162,5 +178,5 @@ export async function spotifyApiPost(url: string, body: any): Promise<any> {
         },
         body: JSON.stringify(body),
     });
-    return response.json();
+    return parseOrThrow(response, url);
 }

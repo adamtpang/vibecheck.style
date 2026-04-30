@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import type { User } from '../App';
-import { spotifyApiGet, spotifyApiPost } from '../utils/spotify-api';
-import { createVibeProfile } from '../utils/vibe-analysis';
+import { spotifyApiGet, spotifyApiPost, SpotifyApiError } from '../utils/spotify-api';
+import { createVibeProfile, calculateLightCompatibility } from '../utils/vibe-analysis';
 import { getVibeLabel } from '../utils/vibe-labels';
 import { getVibeGradient, getContrastTextColor, getSubtleTextColor } from '../utils/vibe-colors';
 import { saveVibe, getVibe } from '../utils/api';
@@ -20,6 +20,7 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [vibeData, setVibeData] = useState<VibeData | null>(null);
+  const [viewerVibe, setViewerVibe] = useState<VibeData | null>(null);
   const [showStory, setShowStory] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +30,38 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   useEffect(() => {
     loadVibe();
   }, [userId]);
+
+  // When viewing someone else's profile while logged in, fetch our own
+  // saved vibe so we can compute a compatibility score on the client.
+  useEffect(() => {
+    if (isOwner || !currentUser) {
+      setViewerVibe(null);
+      return;
+    }
+    let cancelled = false;
+    getVibe(currentUser.id)
+      .then(v => {
+        if (!cancelled) setViewerVibe(v);
+      })
+      .catch(err => console.error('Viewer vibe fetch failed:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [isOwner, currentUser?.id]);
+
+  const compatibilityScore = useMemo(() => {
+    if (!vibeData?.average_features || !viewerVibe?.average_features) return null;
+    return calculateLightCompatibility(
+      {
+        averageFeatures: viewerVibe.average_features as any,
+        topGenres: viewerVibe.top_genres || [],
+      },
+      {
+        averageFeatures: vibeData.average_features as any,
+        topGenres: vibeData.top_genres || [],
+      }
+    );
+  }, [viewerVibe, vibeData]);
 
   async function loadVibe() {
     if (!userId) return;
@@ -170,7 +203,17 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
           navigate('/');
           return;
         }
-        setError('Failed to generate your vibe. Try refreshing.');
+        // Audio-features deprecated for apps created after 2024-11-27 — surface
+        // it explicitly so we don't silently render default-vibe cards.
+        if (err instanceof SpotifyApiError && err.endpoint.includes('/audio-features')) {
+          setError(
+            err.status === 403
+              ? 'Spotify has retired the audio-features API for this app. The vibe engine needs a different data source.'
+              : `Spotify audio-features error (${err.status}): ${err.spotifyMessage}`
+          );
+        } else {
+          setError('Failed to generate your vibe. Try refreshing.');
+        }
       }
     } finally {
       setGenerating(false);
@@ -282,6 +325,33 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
             </div>
           )}
         </div>
+
+        {/* Compatibility (only when logged-in viewer is looking at someone else) */}
+        {!isOwner && currentUser && compatibilityScore != null && (
+          <div
+            className="mb-10 rounded-2xl p-5 text-center"
+            style={{
+              background: `${textColor}10`,
+              border: `1px solid ${textColor}20`,
+            }}
+          >
+            <p className="text-xs uppercase tracking-widest mb-2" style={{ color: subtleColor }}>
+              your vibe match
+            </p>
+            <p className="text-5xl font-bold mb-1" style={{ color: textColor }}>
+              {compatibilityScore}%
+            </p>
+            <p className="text-sm" style={{ color: subtleColor }}>
+              {compatibilityScore >= 85
+                ? 'you two are basically the same person'
+                : compatibilityScore >= 70
+                ? 'serious overlap — make a joint playlist'
+                : compatibilityScore >= 50
+                ? 'some shared territory'
+                : 'opposites attract'}
+            </p>
+          </div>
+        )}
 
         {/* Mood Meters */}
         <div className="grid grid-cols-4 gap-3 mb-10">
@@ -408,13 +478,32 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
           )}
 
           {!isOwner && (
-            <a
-              href="/"
-              className="w-full py-3 rounded-full font-medium text-center border transition-all duration-200 block"
-              style={{ borderColor: `${textColor}40`, color: textColor }}
+            <div className="flex gap-3">
+              <Link
+                to="/explore"
+                className="flex-1 py-3 rounded-full font-medium text-center border transition-all duration-200"
+                style={{ borderColor: `${textColor}40`, color: textColor }}
+              >
+                Explore
+              </Link>
+              <Link
+                to={currentUser ? `/${currentUser.id}` : '/'}
+                className="flex-1 py-3 rounded-full font-medium text-center border transition-all duration-200"
+                style={{ borderColor: `${textColor}40`, color: textColor }}
+              >
+                {currentUser ? 'My Vibe' : 'Create Yours'}
+              </Link>
+            </div>
+          )}
+
+          {isOwner && (
+            <Link
+              to="/explore"
+              className="w-full py-3 rounded-full font-medium text-center border transition-all duration-200 block mt-2"
+              style={{ borderColor: `${textColor}30`, color: subtleColor }}
             >
-              Create Your Own Vibe
-            </a>
+              Explore Other Vibes
+            </Link>
           )}
         </div>
 

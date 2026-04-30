@@ -33,35 +33,30 @@ export interface VibeProfile {
 }
 
 /**
- * Fetches audio features for a list of tracks
+ * Fetches audio features for a list of tracks.
+ * Throws on Spotify API errors so the caller can show a real error instead of
+ * silently falling back to default-vibe values.
  */
 export async function getAudioFeatures(trackIds: string[]): Promise<AudioFeatures[]> {
-    try {
-        // Spotify API allows up to 100 track IDs per request
-        const batches: string[][] = [];
-        for (let i = 0; i < trackIds.length; i += 100) {
-            batches.push(trackIds.slice(i, i + 100));
-        }
-
-        const allFeatures: AudioFeatures[] = [];
-
-        const promises = batches.map(batch =>
-            spotifyApiGet(`https://api.spotify.com/v1/audio-features?ids=${batch.join(',')}`)
-        );
-
-        const responses = await Promise.all(promises);
-
-        for (const response of responses) {
-            if (response.audio_features) {
-                allFeatures.push(...response.audio_features.filter(Boolean));
-            }
-        }
-
-        return allFeatures;
-    } catch (error) {
-        console.error('Error fetching audio features:', error);
-        return [];
+    // Spotify API allows up to 100 track IDs per request
+    const batches: string[][] = [];
+    for (let i = 0; i < trackIds.length; i += 100) {
+        batches.push(trackIds.slice(i, i + 100));
     }
+
+    const responses = await Promise.all(
+        batches.map(batch =>
+            spotifyApiGet(`https://api.spotify.com/v1/audio-features?ids=${batch.join(',')}`)
+        )
+    );
+
+    const allFeatures: AudioFeatures[] = [];
+    for (const response of responses) {
+        if (response.audio_features) {
+            allFeatures.push(...response.audio_features.filter(Boolean));
+        }
+    }
+    return allFeatures;
 }
 
 /**
@@ -310,6 +305,22 @@ function getDefaultAudioFeatures(): AudioFeatures {
         mode: 1,
         time_signature: 4
     };
+}
+
+/**
+ * Lightweight compatibility score using only averageFeatures + topGenres.
+ * For use with the /api/users summary payload, where full track lists aren't
+ * returned. Matches calculateCompatibilityScore's logic but rebalances weights
+ * (audio 78%, genre 22%) so the score still sums to 100%.
+ */
+export function calculateLightCompatibility(
+    a: { averageFeatures: AudioFeatures; topGenres: string[] },
+    b: { averageFeatures: AudioFeatures; topGenres: string[] }
+): number {
+    const audioSimilarity = calculateCosineSimilarity(a.averageFeatures, b.averageFeatures);
+    const genreSimilarity = calculateGenreSimilarity(a.topGenres, b.topGenres);
+    const score = (audioSimilarity * 0.78 + genreSimilarity * 0.22) * 100;
+    return Math.round(score);
 }
 
 /**
