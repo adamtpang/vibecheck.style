@@ -52,7 +52,20 @@ export default function Home({ user }: HomeProps) {
         client_id: CLIENT_ID,
         response_type: 'code',
         redirect_uri: REDIRECT_URI,
-        scope: 'user-read-private user-top-read playlist-modify-public playlist-modify-private',
+        // Bumped in v2.14 to include playback + library scopes so we can show
+        // now-playing, recently-played, and library size on the profile card.
+        // Existing users keep their old scopes until they next re-auth — the
+        // new sections silently no-op for them until they reconnect.
+        scope: [
+          'user-read-private',
+          'user-top-read',
+          'playlist-modify-public',
+          'playlist-modify-private',
+          'user-read-recently-played',
+          'user-read-currently-playing',
+          'user-read-playback-state',
+          'user-library-read',
+        ].join(' '),
         code_challenge_method: 'S256',
         code_challenge: codeChallenge,
       });

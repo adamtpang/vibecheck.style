@@ -30,6 +30,21 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   const [twins, setTwins] = useState<Array<{ user: VibeSummary; score: number }>>([]);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [nowPlaying, setNowPlaying] = useState<{
+    name: string;
+    artist: string;
+    albumArt: string | null;
+    url: string;
+    isPlaying: boolean;
+  } | null>(null);
+  const [recentlyPlayed, setRecentlyPlayed] = useState<Array<{
+    name: string;
+    artist: string;
+    albumArt: string | null;
+    url: string;
+    playedAt: string;
+  }>>([]);
+  const [needsReconnect, setNeedsReconnect] = useState(false);
 
   const isOwner = currentUser?.id === userId;
   // Treat undefined is_public as public — pre-migration rows lack the field.
@@ -70,6 +85,76 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
       }
     );
   }, [viewerVibe, vibeData]);
+
+  // Owner-only: live "now playing" + "recently played" feeds. Fetched
+  // on mount, polled gently for now-playing every 30s. Tokens minted before
+  // v2.14 lack these scopes, so 403/401 quietly trips needsReconnect instead
+  // of breaking the whole card.
+  useEffect(() => {
+    if (!isOwner || !localStorage.getItem('access_token')) return;
+    let cancelled = false;
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    async function fetchNowPlaying() {
+      try {
+        const res = await spotifyApiGet('https://api.spotify.com/v1/me/player/currently-playing');
+        if (cancelled) return;
+        // Spotify returns 204/empty when nothing is playing — parseOrThrow
+        // gives us {} in that case.
+        if (!res || !res.item) {
+          setNowPlaying(null);
+          return;
+        }
+        const item = res.item;
+        setNowPlaying({
+          name: item.name,
+          artist: (item.artists || []).map((a: any) => a.name).join(', '),
+          albumArt: item.album?.images?.[1]?.url || item.album?.images?.[0]?.url || null,
+          url: item.external_urls?.spotify || `https://open.spotify.com/track/${item.id}`,
+          isPlaying: !!res.is_playing,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof SpotifyApiError && (err.status === 401 || err.status === 403)) {
+          setNeedsReconnect(true);
+        }
+        setNowPlaying(null);
+      }
+    }
+
+    async function fetchRecentlyPlayed() {
+      try {
+        const res = await spotifyApiGet('https://api.spotify.com/v1/me/player/recently-played?limit=10');
+        if (cancelled) return;
+        const items = res?.items || [];
+        setRecentlyPlayed(
+          items.map((it: any) => ({
+            name: it.track?.name,
+            artist: (it.track?.artists || []).map((a: any) => a.name).join(', '),
+            albumArt: it.track?.album?.images?.[2]?.url || it.track?.album?.images?.[0]?.url || null,
+            url: it.track?.external_urls?.spotify || '#',
+            playedAt: it.played_at,
+          })).filter((t: any) => t.name)
+        );
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof SpotifyApiError && (err.status === 401 || err.status === 403)) {
+          setNeedsReconnect(true);
+        }
+        setRecentlyPlayed([]);
+      }
+    }
+
+    fetchNowPlaying();
+    fetchRecentlyPlayed();
+    // Poll now-playing every 30s; recently-played is fine to fetch once.
+    interval = setInterval(fetchNowPlaying, 30000);
+
+    return () => {
+      cancelled = true;
+      if (interval) clearInterval(interval);
+    };
+  }, [isOwner, userId]);
 
   // Vibe twins: top 3 most-compatible public users for the owner's view.
   // Skipped for visitors — the compat panel above already serves that role.
@@ -348,6 +433,15 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
     navigate('/');
   }
 
+  // Same flow as logout — clears the token so the next sign-in produces one
+  // with the v2.14 scopes. We redirect home where the standard OAuth flow
+  // takes over.
+  function handleReconnect() {
+    localStorage.clear();
+    setUser(null);
+    navigate('/');
+  }
+
   async function handleDelete() {
     if (!currentUser || deleting) return;
     setDeleting(true);
@@ -433,6 +527,45 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   return (
     <div className="min-h-screen" style={{ background: gradient }}>
       <div className="max-w-lg mx-auto px-6 py-12">
+
+        {/* Now Playing — owner only, shows a live pulsing pill at the top */}
+        {isOwner && nowPlaying && nowPlaying.isPlaying && (
+          <a
+            href={nowPlaying.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 mb-6 p-3 rounded-2xl transition-transform hover:scale-[1.01]"
+            style={{
+              background: `${textColor}10`,
+              border: `1px solid ${textColor}25`,
+            }}
+          >
+            {nowPlaying.albumArt && (
+              <img
+                src={nowPlaying.albumArt}
+                alt=""
+                className="w-12 h-12 rounded-lg flex-shrink-0"
+              />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#1DB954' }} />
+                  <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#1DB954' }} />
+                </span>
+                <span className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: subtleColor }}>
+                  now playing
+                </span>
+              </div>
+              <p className="text-sm font-semibold truncate" style={{ color: textColor }}>
+                {nowPlaying.name}
+              </p>
+              <p className="text-xs truncate" style={{ color: subtleColor }}>
+                {nowPlaying.artist}
+              </p>
+            </div>
+          </a>
+        )}
 
         {/* Header */}
         <div className="text-center mb-10">
@@ -616,6 +749,64 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
                 </a>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Recently Played (owner only) — last 10 tracks scrobbled to Spotify */}
+        {isOwner && recentlyPlayed.length > 0 && (
+          <div className="mb-10">
+            <h2 className="text-sm uppercase tracking-widest mb-4" style={{ color: subtleColor }}>
+              Recently Played
+            </h2>
+            <div className="space-y-2">
+              {recentlyPlayed.slice(0, 6).map((track, i) => (
+                <a
+                  key={`${track.url}-${i}`}
+                  href={track.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-2 rounded-lg transition-colors hover:bg-white/5"
+                >
+                  {track.albumArt && (
+                    <img src={track.albumArt} alt="" className="w-10 h-10 rounded flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: textColor }}>
+                      {track.name}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: subtleColor }}>
+                      {track.artist}
+                    </p>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-widest flex-shrink-0" style={{ color: subtleColor }}>
+                    {formatTimeAgo(track.playedAt)}
+                  </span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Reconnect Spotify nudge — surfaces when an existing token lacks
+            the v2.14 scopes (so now-playing / recently-played 401/403'd) */}
+        {isOwner && needsReconnect && (
+          <div
+            className="mb-10 px-4 py-3 rounded-xl text-sm flex items-center justify-between gap-3"
+            style={{
+              background: `${textColor}10`,
+              border: `1px solid ${textColor}25`,
+              color: textColor,
+            }}
+          >
+            <span>
+              Reconnect Spotify to unlock now-playing and recently-played.
+            </span>
+            <button
+              onClick={handleReconnect}
+              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#1DB954] text-black hover:bg-[#1ed760] transition-colors"
+            >
+              Reconnect
+            </button>
           </div>
         )}
 
@@ -862,4 +1053,21 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
       )}
     </div>
   );
+}
+
+// "5m ago" / "2h ago" / "3d ago" — compact relative time for the
+// recently-played feed.
+function formatTimeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  return `${weeks}w ago`;
 }
