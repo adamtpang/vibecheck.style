@@ -1,4 +1,10 @@
-const CLIENT_ID = 'e4435ec6b82f42189d94e6229acad817';
+// Single source of truth for the Spotify Web API client ID. Reads from a
+// Vite env var when available (set VITE_SPOTIFY_CLIENT_ID in Vercel for
+// staging or a fork) and falls back to the production app's id so a fresh
+// `npm run dev` works without configuration.
+export const CLIENT_ID =
+  (import.meta.env.VITE_SPOTIFY_CLIENT_ID as string | undefined) ||
+  'e4435ec6b82f42189d94e6229acad817';
 
 interface RefreshTokenResponse {
     access_token: string;

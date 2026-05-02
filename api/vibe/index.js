@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless';
+import { sanitizeVibePayload } from '../_lib/sanitize.js';
 
 export default async function handler(req, res) {
   // CORS
@@ -15,7 +16,7 @@ export default async function handler(req, res) {
     spotify_id, display_name, avatar_url, playlist_id,
     vibe_label, vibe_gradient, average_features, top_tracks, top_genres,
     top_artists, is_public,
-  } = req.body;
+  } = sanitizeVibePayload(req.body);
 
   if (!spotify_id || !display_name) {
     return res.status(400).json({ error: 'spotify_id and display_name required' });

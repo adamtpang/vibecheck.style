@@ -20,6 +20,12 @@ export default async function handler(req, res) {
       if (rows.length === 0) {
         return res.status(404).json({ error: 'User not found' });
       }
+      // Cache profile fetches at the Vercel edge for 10s — most repeat
+      // requests come from the same person hitting refresh, OG render, etc.
+      res.setHeader(
+        'Cache-Control',
+        'public, max-age=5, s-maxage=10, stale-while-revalidate=60'
+      );
       return res.json(rows[0]);
     } catch (err) {
       console.error('Error fetching vibe:', err);

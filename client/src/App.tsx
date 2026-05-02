@@ -6,6 +6,7 @@ import Explore from './pages/Explore';
 import Compare from './pages/Compare';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
+import { CLIENT_ID } from './utils/spotify-api';
 import './index.css';
 
 export interface User {
@@ -15,7 +16,6 @@ export interface User {
   playlistId?: string;
 }
 
-const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || 'e4435ec6b82f42189d94e6229acad817';
 const REDIRECT_URI = window.location.origin;
 
 export default function App() {

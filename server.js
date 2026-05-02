@@ -19,6 +19,32 @@ app.use(express.json({ limit: '2mb' }));
 
 // --- API Routes ---
 
+// Mirror of api/_lib/sanitize.js — kept in sync manually since server.js is
+// CommonJS and the api/ functions are ES modules. Cap sizes to keep the DB
+// compact and prevent abuse.
+function sanitizeVibePayload(body = {}) {
+  const clipString = (v, max) => {
+    if (v == null) return null;
+    if (typeof v !== 'string') v = String(v);
+    return v.slice(0, max);
+  };
+  const clipArray = (v, max) => (Array.isArray(v) ? v.slice(0, max) : []);
+  return {
+    spotify_id: clipString(body.spotify_id, 100),
+    display_name: clipString(body.display_name, 200),
+    avatar_url: clipString(body.avatar_url, 1000),
+    playlist_id: clipString(body.playlist_id, 100),
+    vibe_label: clipString(body.vibe_label, 100),
+    vibe_gradient: clipString(body.vibe_gradient, 500),
+    average_features:
+      body.average_features && typeof body.average_features === 'object' ? body.average_features : null,
+    top_tracks: clipArray(body.top_tracks, 20),
+    top_genres: clipArray(body.top_genres, 20).map(g => clipString(g, 50)),
+    top_artists: clipArray(body.top_artists, 20),
+    is_public: typeof body.is_public === 'boolean' ? body.is_public : undefined,
+  };
+}
+
 // Save or update a user's vibe
 app.post('/api/vibe', async (req, res) => {
   const {
@@ -33,7 +59,7 @@ app.post('/api/vibe', async (req, res) => {
     top_genres,
     top_artists,
     is_public,
-  } = req.body;
+  } = sanitizeVibePayload(req.body);
 
   if (!spotify_id || !display_name) {
     return res.status(400).json({ error: 'spotify_id and display_name required' });

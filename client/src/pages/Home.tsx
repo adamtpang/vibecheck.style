@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { User } from '../App';
+import { CLIENT_ID } from '../utils/spotify-api';
 import Footer from '../components/Footer';
 
 interface HomeProps {
   user: User | null;
 }
 
-const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || 'e4435ec6b82f42189d94e6229acad817';
 const REDIRECT_URI = window.location.origin;
 
 function generateCodeVerifier() {

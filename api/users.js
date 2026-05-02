@@ -50,6 +50,12 @@ export default async function handler(req, res) {
       LIMIT 5
     `;
 
+    // Cache at the Vercel edge for 30s — keeps the explore page snappy and
+    // soaks up bursts of traffic without hitting Neon every time.
+    res.setHeader(
+      'Cache-Control',
+      'public, max-age=10, s-maxage=30, stale-while-revalidate=120'
+    );
     res.json({
       users: rows,
       limit,
