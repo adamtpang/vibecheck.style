@@ -1,5 +1,14 @@
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+export interface TopArtist {
+  id: string;
+  name: string;
+  image: string | null;
+  genres: string[];
+  popularity: number;
+  url: string;
+}
+
 export interface VibeData {
   spotify_id: string;
   display_name: string;
@@ -10,6 +19,7 @@ export interface VibeData {
   average_features: Record<string, number> | null;
   top_tracks: any[] | null;
   top_genres: string[] | null;
+  top_artists?: TopArtist[] | null;
   is_public?: boolean;
 }
 

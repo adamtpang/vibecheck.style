@@ -142,14 +142,19 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
     if (!background) setGenerating(true);
 
     try {
-      // Fetch top tracks from all time periods
-      const [shortTerm, mediumTerm, longTerm] = await Promise.all([
+      // Fetch top tracks AND top artists from all time periods in parallel.
+      // Top artists give us photos + richer genre signal than what we derive
+      // from track metadata, and unlock the "Top Artists" section on the card.
+      const [shortTerm, mediumTerm, longTerm, artistsShort, artistsMedium, artistsLong] = await Promise.all([
         spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=50'),
         spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=medium_term&limit=50'),
         spotifyApiGet('https://api.spotify.com/v1/me/top/tracks?time_range=long_term&limit=50'),
+        spotifyApiGet('https://api.spotify.com/v1/me/top/artists?time_range=short_term&limit=50'),
+        spotifyApiGet('https://api.spotify.com/v1/me/top/artists?time_range=medium_term&limit=50'),
+        spotifyApiGet('https://api.spotify.com/v1/me/top/artists?time_range=long_term&limit=50'),
       ]);
 
-      // Weighted scoring
+      // Weighted scoring (same shape for tracks and artists)
       const trackScores = new Map<string, number>();
       const trackDetails = new Map<string, any>();
       const weights: Record<string, number> = { short_term: 100, medium_term: 50, long_term: 25 };
@@ -170,6 +175,35 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
       const sortedTracks = Array.from(trackScores.entries())
         .sort(([, a], [, b]) => b - a)
         .map(([uri]) => trackDetails.get(uri));
+
+      // Same weighted-aggregate trick for artists
+      const artistScores = new Map<string, number>();
+      const artistDetails = new Map<string, any>();
+      [
+        { artists: artistsShort.items || [], label: 'short_term' },
+        { artists: artistsMedium.items || [], label: 'medium_term' },
+        { artists: artistsLong.items || [], label: 'long_term' },
+      ].forEach(({ artists, label }) => {
+        artists.forEach((artist: any, index: number) => {
+          const id = artist.id;
+          const score = (artists.length - index) * weights[label];
+          artistScores.set(id, (artistScores.get(id) || 0) + score);
+          if (!artistDetails.has(id)) artistDetails.set(id, artist);
+        });
+      });
+      const topArtistsRaw = Array.from(artistScores.entries())
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 12)
+        .map(([id]) => artistDetails.get(id));
+      const topArtists = topArtistsRaw.map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        // 320x320 if available, else the largest provided (Spotify gives 640/320/160)
+        image: a.images?.find((img: any) => img.width <= 320)?.url || a.images?.[0]?.url || null,
+        genres: a.genres || [],
+        popularity: a.popularity ?? 0,
+        url: a.external_urls?.spotify || `https://open.spotify.com/artist/${a.id}`,
+      }));
 
       if (sortedTracks.length === 0) {
         setError('No listening history found. Listen to some music on Spotify first!');
@@ -215,6 +249,23 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
         uri: t.uri,
       }));
 
+      // Re-derive top genres from top_artists (which include genre data,
+      // unlike the sparse artist refs on top_tracks). Falls back to whatever
+      // createVibeProfile got from track metadata if no artist genres exist.
+      const artistGenreCounts: Record<string, number> = {};
+      topArtistsRaw.forEach((a: any, idx: number) => {
+        const weight = topArtistsRaw.length - idx; // higher rank → more weight
+        (a.genres || []).forEach((g: string) => {
+          const key = g.toLowerCase().trim();
+          artistGenreCounts[key] = (artistGenreCounts[key] || 0) + weight;
+        });
+      });
+      const richTopGenres = Object.entries(artistGenreCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([g]) => g);
+      const finalTopGenres = richTopGenres.length > 0 ? richTopGenres : profile.topGenres;
+
       const data: VibeData = {
         spotify_id: currentUser.id,
         display_name: currentUser.display_name,
@@ -224,7 +275,8 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
         vibe_gradient: gradient.css,
         average_features: profile.averageFeatures as any,
         top_tracks: top5,
-        top_genres: profile.topGenres,
+        top_genres: finalTopGenres,
+        top_artists: topArtists,
       };
 
       setVibeData(data);
@@ -369,6 +421,7 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   const subtleColor = features.valence != null ? getSubtleTextColor(features as any) : 'rgba(255,255,255,0.6)';
   const topTracks = vibeData.top_tracks || [];
   const topGenres = vibeData.top_genres || [];
+  const topArtists = vibeData.top_artists || [];
 
   const meters = [
     { label: 'Energy', value: features.energy || 0 },
@@ -507,6 +560,60 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
                     </p>
                   </div>
                 </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Top Artists */}
+        {topArtists.length > 0 && (
+          <div className="mb-10">
+            <h2 className="text-sm uppercase tracking-widest mb-4" style={{ color: subtleColor }}>
+              Top Artists
+            </h2>
+            <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
+              {topArtists.slice(0, 10).map((artist, i) => (
+                <a
+                  key={artist.id}
+                  href={artist.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group block text-center"
+                  title={artist.genres?.slice(0, 3).join(', ') || ''}
+                >
+                  <div className="relative">
+                    {artist.image ? (
+                      <img
+                        src={artist.image}
+                        alt={artist.name}
+                        className="w-full aspect-square rounded-full object-cover mb-2 transition-transform group-hover:scale-105"
+                        style={{ border: `2px solid ${textColor}20` }}
+                      />
+                    ) : (
+                      <div
+                        className="w-full aspect-square rounded-full mb-2 flex items-center justify-center text-xl font-bold"
+                        style={{ background: `${textColor}15`, color: textColor }}
+                      >
+                        {artist.name?.[0] ?? '?'}
+                      </div>
+                    )}
+                    <span
+                      className="absolute -top-1 -left-1 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                      style={{
+                        background: `${textColor}`,
+                        color: gradient.includes('hsl') ? '#000' : '#fff',
+                      }}
+                    >
+                      {i + 1}
+                    </span>
+                  </div>
+                  <p
+                    className="text-xs font-semibold truncate leading-tight"
+                    style={{ color: textColor }}
+                  >
+                    {artist.name}
+                  </p>
+                </a>
               ))}
             </div>
           </div>

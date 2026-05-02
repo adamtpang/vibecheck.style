@@ -31,6 +31,7 @@ app.post('/api/vibe', async (req, res) => {
     average_features,
     top_tracks,
     top_genres,
+    top_artists,
     is_public,
   } = req.body;
 
@@ -39,11 +40,12 @@ app.post('/api/vibe', async (req, res) => {
   }
 
   const explicitPublic = typeof is_public === 'boolean';
+  const topArtistsJson = JSON.stringify(Array.isArray(top_artists) ? top_artists : []);
 
   try {
     if (explicitPublic) {
-      await sql`INSERT INTO users (spotify_id, display_name, avatar_url, playlist_id, vibe_label, vibe_gradient, average_features, top_tracks, top_genres, is_public, updated_at)
-         VALUES (${spotify_id}, ${display_name}, ${avatar_url}, ${playlist_id}, ${vibe_label}, ${vibe_gradient}, ${JSON.stringify(average_features)}, ${JSON.stringify(top_tracks)}, ${JSON.stringify(top_genres)}, ${is_public}, NOW())
+      await sql`INSERT INTO users (spotify_id, display_name, avatar_url, playlist_id, vibe_label, vibe_gradient, average_features, top_tracks, top_genres, top_artists, is_public, updated_at)
+         VALUES (${spotify_id}, ${display_name}, ${avatar_url}, ${playlist_id}, ${vibe_label}, ${vibe_gradient}, ${JSON.stringify(average_features)}, ${JSON.stringify(top_tracks)}, ${JSON.stringify(top_genres)}, ${topArtistsJson}, ${is_public}, NOW())
          ON CONFLICT (spotify_id) DO UPDATE SET
            display_name = ${display_name},
            avatar_url = ${avatar_url},
@@ -53,11 +55,12 @@ app.post('/api/vibe', async (req, res) => {
            average_features = ${JSON.stringify(average_features)},
            top_tracks = ${JSON.stringify(top_tracks)},
            top_genres = ${JSON.stringify(top_genres)},
+           top_artists = ${topArtistsJson},
            is_public = ${is_public},
            updated_at = NOW()`;
     } else {
-      await sql`INSERT INTO users (spotify_id, display_name, avatar_url, playlist_id, vibe_label, vibe_gradient, average_features, top_tracks, top_genres, updated_at)
-         VALUES (${spotify_id}, ${display_name}, ${avatar_url}, ${playlist_id}, ${vibe_label}, ${vibe_gradient}, ${JSON.stringify(average_features)}, ${JSON.stringify(top_tracks)}, ${JSON.stringify(top_genres)}, NOW())
+      await sql`INSERT INTO users (spotify_id, display_name, avatar_url, playlist_id, vibe_label, vibe_gradient, average_features, top_tracks, top_genres, top_artists, updated_at)
+         VALUES (${spotify_id}, ${display_name}, ${avatar_url}, ${playlist_id}, ${vibe_label}, ${vibe_gradient}, ${JSON.stringify(average_features)}, ${JSON.stringify(top_tracks)}, ${JSON.stringify(top_genres)}, ${topArtistsJson}, NOW())
          ON CONFLICT (spotify_id) DO UPDATE SET
            display_name = ${display_name},
            avatar_url = ${avatar_url},
@@ -67,6 +70,7 @@ app.post('/api/vibe', async (req, res) => {
            average_features = ${JSON.stringify(average_features)},
            top_tracks = ${JSON.stringify(top_tracks)},
            top_genres = ${JSON.stringify(top_genres)},
+           top_artists = ${topArtistsJson},
            updated_at = NOW()`;
     }
     res.json({ success: true });
