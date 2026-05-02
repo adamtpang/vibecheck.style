@@ -72,7 +72,9 @@ export default function Compare({ currentUser }: CompareProps) {
   }, [a, b]);
 
   function handleShare() {
-    const url = `${window.location.origin}/compare/${idA}/${idB}`;
+    // Same /share pattern as profile URLs — recipients get the per-pair OG
+    // image preview before being redirected into the SPA.
+    const url = `${window.location.origin}/share/compare/${idA}/${idB}`;
     navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
