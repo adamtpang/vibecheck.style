@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import type { User } from '../App';
 import { getUsers, getVibe } from '../utils/api';
 import type { VibeSummary, VibeLabelCount } from '../utils/api';
 import { calculateLightCompatibility } from '../utils/vibe-analysis';
 import { getContrastTextColor, getSubtleTextColor, asColorRef } from '../utils/vibe-colors';
+import { fadeUp, staggerContainer, cardSpring } from '../utils/motion';
 import Footer from '../components/Footer';
 
 interface ExploreProps {
@@ -84,8 +86,13 @@ export default function Explore({ currentUser }: ExploreProps) {
   }, [users, me, sort, currentUser?.id]);
 
   return (
-    <div className="min-h-screen bg-black">
-      <div className="max-w-6xl mx-auto px-6 py-12">
+    <div className="ambient-bg min-h-screen bg-black overflow-hidden">
+      <motion.div
+        className="max-w-6xl mx-auto px-6 py-12"
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+      >
         {/* Header */}
         <div className="flex items-center justify-between mb-10">
           <div>
@@ -110,42 +117,51 @@ export default function Explore({ currentUser }: ExploreProps) {
 
         {/* Stats badge */}
         {!loading && total > 0 && (
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-6 rounded-full bg-white/5 border border-white/10">
+          <motion.div
+            variants={fadeUp}
+            className="glass inline-flex items-center gap-2 px-3 py-1.5 mb-6 rounded-full"
+          >
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-white/70 text-xs font-medium">
+            <span className="text-white/80 text-xs font-medium">
               {total.toLocaleString()} {total === 1 ? 'vibe' : 'vibes'} generated
             </span>
-          </div>
+          </motion.div>
         )}
 
         {/* Top vibe labels — social proof */}
         {!loading && topLabels.length > 0 && (
-          <div className="mb-8">
+          <motion.div variants={fadeUp} className="mb-8">
             <p className="text-white/40 text-xs uppercase tracking-widest mb-3">
               what people are vibing on
             </p>
-            <div className="flex flex-wrap gap-2">
+            <motion.div
+              className="flex flex-wrap gap-2"
+              variants={staggerContainer}
+              initial="initial"
+              animate="animate"
+            >
               {topLabels.map(({ label, count }) => (
-                <div
+                <motion.div
                   key={label}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10"
+                  variants={fadeUp}
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  transition={cardSpring}
+                  className="glass inline-flex items-center gap-2 px-3 py-1.5 rounded-full"
                 >
                   <span className="text-white text-sm font-medium">{label}</span>
-                  <span className="text-white/40 text-xs">
-                    {count.toLocaleString()}
-                  </span>
-                </div>
+                  <span className="text-white/50 text-xs">{count.toLocaleString()}</span>
+                </motion.div>
               ))}
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
 
         {/* Sort toggle (only when logged-in) */}
         {currentUser && (
-          <div className="flex gap-2 mb-8">
+          <motion.div variants={fadeUp} className="flex gap-2 mb-8">
             <SortPill active={sort === 'match'} onClick={() => setSort('match')} label="matches" />
             <SortPill active={sort === 'recent'} onClick={() => setSort('recent')} label="recent" />
-          </div>
+          </motion.div>
         )}
 
         {/* States */}
@@ -154,25 +170,30 @@ export default function Explore({ currentUser }: ExploreProps) {
           <p className="text-white/60 text-center py-20">{error}</p>
         )}
         {!loading && !error && visible.length === 0 && (
-          <div className="text-center py-20">
+          <motion.div variants={fadeUp} className="text-center py-20">
             <p className="text-white/60 mb-4">no vibes here yet.</p>
             <Link to="/" className="text-[#1DB954] hover:underline font-medium">
               be the first →
             </Link>
-          </div>
+          </motion.div>
         )}
 
         {/* Grid */}
         {!loading && !error && visible.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <motion.div
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+            variants={staggerContainer}
+            initial="initial"
+            animate="animate"
+          >
             {visible.map(({ user, score }) => (
               <VibeCardTile key={user.spotify_id} user={user} score={score} />
             ))}
-          </div>
+          </motion.div>
         )}
 
         <Footer />
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -210,70 +231,72 @@ function VibeCardTile({ user, score }: { user: VibeSummary; score: number | null
   const topGenre = user.top_genres?.[0];
 
   return (
-    <Link
-      to={`/${user.spotify_id}`}
-      className="group relative block rounded-2xl overflow-hidden aspect-[4/5] transition-transform duration-200 hover:scale-[1.02]"
-      style={{ background: gradient }}
-    >
-      {/* Top-right compatibility badge */}
-      {score != null && (
-        <div
-          className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-md"
-          style={{
-            background: 'rgba(0,0,0,0.35)',
-            color: '#fff',
-            border: '1px solid rgba(255,255,255,0.2)',
-          }}
+    <motion.div variants={fadeUp} className="rounded-2xl">
+      <Link
+        to={`/${user.spotify_id}`}
+        className="group relative block rounded-2xl overflow-hidden aspect-[4/5] shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
+        style={{ background: gradient }}
+      >
+        <motion.div
+          className="absolute inset-0"
+          whileHover={{ scale: 1.04 }}
+          transition={cardSpring}
         >
-          {score}% match
-        </div>
-      )}
-
-      <div className="absolute inset-0 p-5 flex flex-col justify-between">
-        {/* Top: avatar + name */}
-        <div className="flex items-center gap-3">
-          {user.avatar_url ? (
-            <img
-              src={user.avatar_url}
-              alt=""
-              className="w-10 h-10 rounded-full border-2 object-cover"
-              style={{ borderColor: text }}
-            />
-          ) : (
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
-              style={{ background: 'rgba(0,0,0,0.25)', color: text }}
-            >
-              {user.display_name?.[0] ?? '?'}
+          <div className="absolute inset-0" style={{ background: gradient }} />
+          {/* Top-right compatibility badge — glass */}
+          {score != null && (
+            <div className="glass-dark absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-semibold text-white z-10">
+              {score}% match
             </div>
           )}
-          <p
-            className="text-base font-semibold truncate"
-            style={{ color: text }}
-          >
-            {user.display_name}
-          </p>
-        </div>
 
-        {/* Bottom: vibe label + top genre */}
-        <div>
-          <p
-            className="text-2xl font-bold leading-tight mb-1"
-            style={{ color: text }}
-          >
-            {user.vibe_label}
-          </p>
-          {topGenre && (
-            <p
-              className="text-xs uppercase tracking-wider truncate"
-              style={{ color: subtle }}
-            >
-              {topGenre}
-            </p>
-          )}
-        </div>
-      </div>
-    </Link>
+          <div className="absolute inset-0 p-5 flex flex-col justify-between">
+            {/* Top: avatar + name */}
+            <div className="flex items-center gap-3">
+              {user.avatar_url ? (
+                <img
+                  src={user.avatar_url}
+                  alt=""
+                  className="w-10 h-10 rounded-full border-2 object-cover"
+                  style={{ borderColor: text }}
+                />
+              ) : (
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
+                  style={{ background: 'rgba(0,0,0,0.25)', color: text }}
+                >
+                  {user.display_name?.[0] ?? '?'}
+                </div>
+              )}
+              <p
+                className="text-base font-semibold truncate"
+                style={{ color: text }}
+              >
+                {user.display_name}
+              </p>
+            </div>
+
+            {/* Bottom: vibe label + top genre */}
+            <div>
+              <p
+                className="text-2xl font-bold leading-tight mb-1"
+                style={{ color: text }}
+              >
+                {user.vibe_label}
+              </p>
+              {topGenre && (
+                <p
+                  className="text-xs uppercase tracking-wider truncate"
+                  style={{ color: subtle }}
+                >
+                  {topGenre}
+                </p>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      </Link>
+    </motion.div>
   );
 }
 

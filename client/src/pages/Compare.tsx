@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import type { User } from '../App';
 import { getVibe } from '../utils/api';
 import type { VibeData } from '../utils/api';
 import { calculateCompatBreakdown } from '../utils/vibe-analysis';
 import type { CompatBreakdown } from '../utils/vibe-analysis';
 import { getContrastTextColor, asColorRef } from '../utils/vibe-colors';
+import { fadeUp, heroIn, staggerContainer, cardSpring, easeOutQuart } from '../utils/motion';
 import Footer from '../components/Footer';
 
 interface CompareProps {
@@ -108,95 +110,120 @@ export default function Compare({ currentUser }: CompareProps) {
   const headline = pickHeadlineFeature(breakdown);
 
   return (
-    <div className="min-h-screen bg-black">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <div className="ambient-bg min-h-screen bg-black overflow-hidden">
+      <motion.div
+        className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12"
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+      >
         {/* Tiny nav */}
-        <div className="flex items-center justify-between mb-6">
+        <motion.div variants={fadeUp} className="flex items-center justify-between mb-6">
           <Link
             to="/explore"
-            className="text-white/40 hover:text-white text-sm font-medium transition-colors"
+            className="text-white/50 hover:text-white text-sm font-medium transition-colors"
           >
             ← explore
           </Link>
           <button
             onClick={handleShare}
-            className="text-white/60 hover:text-white text-sm font-medium transition-colors"
+            className="text-white/70 hover:text-white text-sm font-medium transition-colors"
           >
             {copied ? 'link copied!' : 'share this comparison'}
           </button>
-        </div>
+        </motion.div>
 
-        {/* Headline */}
-        <div className="text-center mb-8 sm:mb-10">
-          <p className="text-white/40 text-xs uppercase tracking-widest mb-2">
+        {/* Headline — animated count-up via spring + glass medallion feel */}
+        <motion.div variants={heroIn} className="text-center mb-8 sm:mb-10">
+          <p className="text-white/50 text-xs uppercase tracking-widest mb-2">
             vibe match
           </p>
-          <div className="text-7xl sm:text-9xl font-black text-white leading-none mb-2">
+          <motion.div
+            initial={{ scale: 0.7, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.8, ease: easeOutQuart, delay: 0.15 }}
+            className="text-7xl sm:text-9xl font-black leading-none mb-2 shimmer-text"
+          >
             {breakdown.score}%
-          </div>
-          <p className="text-white/70 text-base sm:text-lg max-w-md mx-auto">
-            {verdict}
-          </p>
-        </div>
+          </motion.div>
+          <p className="text-white/75 text-base sm:text-lg max-w-md mx-auto">{verdict}</p>
+        </motion.div>
 
         {/* Side-by-side cards */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-8">
+        <motion.div
+          variants={fadeUp}
+          className="grid grid-cols-2 gap-3 sm:gap-4 mb-8"
+        >
           <CompareCard vibe={a} side="left" />
           <CompareCard vibe={b} side="right" />
-        </div>
+        </motion.div>
 
-        {/* Breakdown bars */}
-        <div className="mb-8 space-y-4">
-          <BreakdownBar label="Audio similarity" value={breakdown.audio} />
+        {/* Breakdown bars — glass container */}
+        <motion.div variants={fadeUp} className="glass mb-8 p-5 rounded-2xl space-y-4">
+          <BreakdownBar label="Vibe similarity" value={breakdown.audio} />
           <BreakdownBar label="Genre overlap" value={breakdown.genre} />
-        </div>
+        </motion.div>
 
         {/* Headline feature */}
         {headline && (
-          <div className="mb-8 px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-center">
+          <motion.div
+            variants={fadeUp}
+            className="glass mb-8 px-5 py-4 rounded-2xl text-center"
+          >
             <p className="text-white text-base sm:text-lg">{headline}</p>
-          </div>
+          </motion.div>
         )}
 
         {/* Shared genres */}
         {breakdown.sharedGenres.length > 0 && (
-          <div className="mb-8">
-            <p className="text-white/40 text-xs uppercase tracking-widest mb-3 text-center">
+          <motion.div variants={fadeUp} className="mb-8">
+            <p className="text-white/50 text-xs uppercase tracking-widest mb-3 text-center">
               shared genres ({breakdown.sharedGenres.length})
             </p>
-            <div className="flex flex-wrap gap-2 justify-center">
+            <motion.div
+              className="flex flex-wrap gap-2 justify-center"
+              variants={staggerContainer}
+              initial="initial"
+              animate="animate"
+            >
               {breakdown.sharedGenres.slice(0, 8).map(g => (
-                <span
+                <motion.span
                   key={g}
-                  className="px-3 py-1 rounded-full text-xs font-medium bg-white/10 text-white/80 border border-white/20"
+                  variants={fadeUp}
+                  whileHover={{ scale: 1.05, y: -1 }}
+                  transition={cardSpring}
+                  className="glass px-3 py-1 rounded-full text-xs font-medium text-white"
                 >
                   {g}
-                </span>
+                </motion.span>
               ))}
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
 
         {/* CTAs */}
-        <div className="flex flex-col sm:flex-row gap-3 justify-center mb-12">
+        <motion.div
+          variants={fadeUp}
+          className="flex flex-col sm:flex-row gap-3 justify-center mb-12"
+        >
           {currentUser && currentUser.id !== idA && currentUser.id !== idB && (
             <Link
               to={`/compare/${currentUser.id}/${idA}`}
-              className="px-6 py-3 rounded-full font-medium text-center border border-white/20 text-white hover:bg-white/5 transition-colors"
+              className="glass px-6 py-3 rounded-full font-medium text-center text-white hover:bg-white/10 transition-colors"
             >
               Compare me with {a.display_name}
             </Link>
           )}
           <Link
             to="/"
-            className="px-6 py-3 rounded-full font-semibold text-center bg-[#1DB954] text-black hover:bg-[#1ed760] transition-colors"
+            className="px-6 py-3 rounded-full font-semibold text-center bg-[#1DB954] text-black hover:bg-[#1ed760] transition-colors shadow-[0_8px_32px_rgba(29,185,84,0.35)]"
           >
             {currentUser ? 'My Vibe' : 'Make Your Vibe'}
           </Link>
-        </div>
+        </motion.div>
 
         <Footer />
-      </div>
+      </motion.div>
     </div>
   );
 }
