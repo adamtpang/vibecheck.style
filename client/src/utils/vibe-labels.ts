@@ -1,150 +1,136 @@
-import type { AudioFeatures } from './vibe-analysis';
-
-interface VibeArchetype {
-  label: string;
-  emoji: string;
-  description: string;
-  score: (f: AudioFeatures) => number;
-}
-
-const archetypes: VibeArchetype[] = [
-  {
-    label: 'Main Character Energy',
-    emoji: '✨',
-    description: 'High energy, high positivity — you walk in and the soundtrack starts',
-    score: (f) => f.energy * 0.5 + f.valence * 0.5,
-  },
-  {
-    label: 'Party Animal',
-    emoji: '🪩',
-    description: 'Born to dance, forced to sleep',
-    score: (f) => f.danceability * 0.5 + f.energy * 0.3 + (1 - f.acousticness) * 0.2,
-  },
-  {
-    label: 'Sad Boy Hours',
-    emoji: '🌧️',
-    description: 'Low valence, high acoustics — you feel everything deeply',
-    score: (f) => (1 - f.valence) * 0.5 + f.acousticness * 0.3 + (1 - f.energy) * 0.2,
-  },
-  {
-    label: 'Night Owl',
-    emoji: '🦉',
-    description: 'Dark, moody, atmospheric — your playlist hits different at 2am',
-    score: (f) => (1 - f.valence) * 0.3 + f.energy * 0.3 + (1 - f.acousticness) * 0.2 + f.instrumentalness * 0.2,
-  },
-  {
-    label: 'Indie Dreamer',
-    emoji: '🌿',
-    description: 'Chill, organic, thoughtful — you found them before they were cool',
-    score: (f) => f.acousticness * 0.4 + (1 - f.energy) * 0.2 + f.valence * 0.2 + f.instrumentalness * 0.2,
-  },
-  {
-    label: 'Club Kid',
-    emoji: '💿',
-    description: 'High BPM, low acoustics — the bass is your heartbeat',
-    score: (f) => f.danceability * 0.4 + (1 - f.acousticness) * 0.3 + f.energy * 0.3,
-  },
-  {
-    label: 'Campfire Soul',
-    emoji: '🔥',
-    description: 'Warm, acoustic, feel-good — you bring the guitar to every hangout',
-    score: (f) => f.acousticness * 0.4 + f.valence * 0.4 + (1 - f.energy) * 0.2,
-  },
-  {
-    label: 'Rage Machine',
-    emoji: '⚡',
-    description: 'High energy, low positivity — you listen to music like it owes you money',
-    score: (f) => f.energy * 0.5 + (1 - f.valence) * 0.4 + f.loudness > -8 ? 0.1 : 0,
-  },
-  {
-    label: 'Headphone Hermit',
-    emoji: '🎧',
-    description: 'Instrumental, introspective — your playlist is a private world',
-    score: (f) => f.instrumentalness * 0.5 + (1 - f.speechiness) * 0.3 + (1 - f.liveness) * 0.2,
-  },
-  {
-    label: 'Sunshine Pop',
-    emoji: '☀️',
-    description: 'Bright, bouncy, infectious — you make playlists for road trips',
-    score: (f) => f.valence * 0.4 + f.danceability * 0.3 + f.energy * 0.3,
-  },
-  {
-    label: 'Lo-Fi Philosopher',
-    emoji: '📚',
-    description: 'Chill beats, low energy — studying or zoning out, no in between',
-    score: (f) => (1 - f.energy) * 0.3 + f.instrumentalness * 0.3 + (1 - f.speechiness) * 0.2 + (1 - f.liveness) * 0.2,
-  },
-  {
-    label: 'Velvet Underground',
-    emoji: '🖤',
-    description: 'Smooth, dark, sophisticated — you curate, you don\'t just listen',
-    score: (f) => (1 - f.energy) * 0.3 + (1 - f.valence) * 0.3 + (1 - f.danceability) * 0.2 + f.acousticness * 0.2,
-  },
-  {
-    label: 'Rhythm & Grooves',
-    emoji: '🎶',
-    description: 'Danceable, soulful, smooth — you hear the groove in everything',
-    score: (f) => f.danceability * 0.5 + f.valence * 0.3 + (1 - f.instrumentalness) * 0.2,
-  },
-  {
-    label: 'Podcast Brain',
-    emoji: '🎙️',
-    description: 'High speechiness — are you even listening to music?',
-    score: (f) => f.speechiness * 0.7 + (1 - f.instrumentalness) * 0.3,
-  },
-  {
-    label: 'Genre Fluid',
-    emoji: '🌈',
-    description: 'Perfectly balanced — you listen to literally everything',
-    score: (f) => {
-      // Score higher when all features are near 0.5 (balanced)
-      const features = [f.energy, f.valence, f.danceability, f.acousticness];
-      const avgDeviation = features.reduce((sum, v) => sum + Math.abs(v - 0.5), 0) / features.length;
-      return 1 - avgDeviation; // Higher score when closer to balanced
-    },
-  },
-  {
-    label: 'Festival Headliner',
-    emoji: '🎪',
-    description: 'Loud, live, euphoric — you need 50,000 people to feel complete',
-    score: (f) => f.energy * 0.3 + f.liveness * 0.4 + f.valence * 0.3,
-  },
-];
+import type { VibeMetrics } from './vibe-analysis';
 
 export interface VibeLabel {
   label: string;
   emoji: string;
   description: string;
+  /** 0-100 confidence in this label vs alternates */
   confidence: number;
 }
 
-export function getVibeLabel(features: AudioFeatures): VibeLabel {
-  let bestMatch: VibeArchetype = archetypes[0];
-  let bestScore = -1;
+interface Archetype {
+  emoji: string;
+  label: string;
+  description: string;
+  /** Returns 0..1 fit score for given metrics */
+  score: (m: VibeMetrics) => number;
+}
 
-  for (const archetype of archetypes) {
-    const score = archetype.score(features);
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = archetype;
-    }
-  }
+// Helper for the score functions: penalty for being far from a target value.
+// 1.0 = bullseye, 0.0 = at the opposite end of 0..1 space.
+const near = (v: number, target: number) => 1 - Math.abs(v - target);
+const high = (v: number) => Math.max(0, (v - 0.5) * 2);
+const low = (v: number) => Math.max(0, (0.5 - v) * 2);
 
+const archetypes: Archetype[] = [
+  // --- Trumps that override the quadrants when extreme ---
+  {
+    emoji: '🔥',
+    label: 'Hot Take Era',
+    description: 'Your taste is actively rewriting itself — what you love today is not what you loved last year.',
+    score: m => Math.max(0, m.recencyShift - 0.6) * 2.5,
+  },
+  {
+    emoji: '📚',
+    label: 'Genre Polymath',
+    description: 'You speak every musical language. Algorithms hate you.',
+    score: m => Math.max(0, m.diversity - 0.75) * 2.5,
+  },
+  {
+    emoji: '🎭',
+    label: 'Stan Era',
+    description: 'One artist is most of your replays right now.',
+    score: m => Math.max(0, m.artistConcentration - 0.45) * 2.5,
+  },
+  {
+    emoji: '🍷',
+    label: 'Decade Hopper',
+    description: 'You travel through musical history every playlist.',
+    score: m => Math.max(0, m.eraSpread - 0.65) * 2.2,
+  },
+
+  // --- Quadrants of mainstream × modernity × diversity ---
+  {
+    emoji: '🎯',
+    label: 'Top 40 Disciple',
+    description: 'You speak the lingua franca of pop — what\'s on the radio is what\'s on you.',
+    score: m => high(m.mainstream) * high(m.modernity) * low(m.diversity),
+  },
+  {
+    emoji: '✨',
+    label: 'Pop Polyglot',
+    description: 'Mainstream-friendly without being monogenre. You meet people where they are.',
+    score: m => high(m.mainstream) * high(m.modernity) * near(m.diversity, 0.6),
+  },
+  {
+    emoji: '📻',
+    label: 'Classic Hits Soul',
+    description: 'The radio raised you and you never left.',
+    score: m => high(m.mainstream) * low(m.modernity) * low(m.diversity),
+  },
+  {
+    emoji: '🎬',
+    label: 'Soundtrack Soul',
+    description: 'Eclectic but timeless — your playlist could score a film.',
+    score: m => high(m.mainstream) * low(m.modernity) * high(m.diversity),
+  },
+  {
+    emoji: '🌑',
+    label: 'Underground Devotee',
+    description: 'You found them before they were cool, and you\'re fine if they never get there.',
+    score: m => low(m.mainstream) * high(m.modernity) * low(m.diversity),
+  },
+  {
+    emoji: '🌐',
+    label: 'Crate Digger',
+    description: 'Niche meets curious. The algorithm cannot pin you.',
+    score: m => low(m.mainstream) * high(m.modernity) * high(m.diversity),
+  },
+  {
+    emoji: '📼',
+    label: 'Cassette Curator',
+    description: 'Old soul, narrow obsessions — and proud.',
+    score: m => low(m.mainstream) * low(m.modernity) * low(m.diversity),
+  },
+  {
+    emoji: '🕰️',
+    label: 'Time Traveler',
+    description: 'Pre-streaming wisdom across genres no one teaches anymore.',
+    score: m => low(m.mainstream) * low(m.modernity) * high(m.diversity),
+  },
+
+  // --- Catch-all when nothing dominates ---
+  {
+    emoji: '🎶',
+    label: 'Eclectic Soul',
+    description: 'Doesn\'t fit a box — and that\'s the point.',
+    score: m => 0.4 + 0.2 * (1 - Math.abs(m.diversity - 0.5)),
+  },
+];
+
+export function getVibeLabel(metrics: VibeMetrics): VibeLabel {
+  const scored = archetypes
+    .map(a => ({ a, score: a.score(metrics) }))
+    .sort((x, y) => y.score - x.score);
+  const best = scored[0];
+  // Confidence: how far ahead the winner is over the runner-up
+  const margin = best.score - (scored[1]?.score ?? 0);
+  const confidence = Math.round(Math.min(1, best.score) * 100 - margin * 10);
   return {
-    label: bestMatch.label,
-    emoji: bestMatch.emoji,
-    description: bestMatch.description,
-    confidence: Math.round(bestScore * 100),
+    label: best.a.label,
+    emoji: best.a.emoji,
+    description: best.a.description,
+    confidence: Math.max(0, Math.min(99, confidence)),
   };
 }
 
-export function getTopVibeLabels(features: AudioFeatures, count = 3): VibeLabel[] {
+export function getTopVibeLabels(metrics: VibeMetrics, count = 3): VibeLabel[] {
   return archetypes
-    .map((archetype) => ({
-      label: archetype.label,
-      emoji: archetype.emoji,
-      description: archetype.description,
-      confidence: Math.round(archetype.score(features) * 100),
+    .map(a => ({
+      label: a.label,
+      emoji: a.emoji,
+      description: a.description,
+      confidence: Math.round(Math.min(1, a.score(metrics)) * 100),
     }))
     .sort((a, b) => b.confidence - a.confidence)
     .slice(0, count);

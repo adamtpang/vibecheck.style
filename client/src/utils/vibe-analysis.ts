@@ -1,5 +1,17 @@
-import { spotifyApiGet } from './spotify-api';
+// Vibe analysis without /v1/audio-features — Spotify revoked that endpoint
+// for our app sometime after the v2.4–v2.13 work. Everything here is derived
+// from data still available via /v1/me/top/tracks + /v1/me/top/artists:
+//   - track.popularity, track.album.release_date, track.artists
+//   - artist.genres, artist.popularity, artist.followers
+// The new vibe profile captures *listener identity* (mainstream vs underground,
+// modern vs retro, focused vs eclectic, stable vs evolving) instead of
+// *audio character* (energy/valence/danceability/etc.).
 
+/**
+ * @deprecated kept only so older code paths and stored DB rows that still
+ * reference audio-feature fields don't crash. New vibe profiles use
+ * VibeMetrics. Callers should migrate.
+ */
 export interface AudioFeatures {
     acousticness: number;
     danceability: number;
@@ -15,378 +27,341 @@ export interface AudioFeatures {
     time_signature: number;
 }
 
-export interface TrackWithFeatures {
+export interface VibeMetrics {
+    /** 0 = underground, 1 = top of the charts (avg track popularity / 100) */
+    mainstream: number;
+    /** 0 = pre-1960, 1 = current year (avg release year, normalized) */
+    modernity: number;
+    /** 0 = monogenre, 1 = polymath (genre Shannon entropy, normalized) */
+    diversity: number;
+    /** 0 = stable taste, 1 = actively discovering (short_term vs long_term divergence) */
+    recencyShift: number;
+    /** 0 = perfectly spread across artists, 1 = full stan culture (Herfindahl index) */
+    artistConcentration: number;
+    /** 0 = focused on one era, 1 = decade-hopping (std dev of release years) */
+    eraSpread: number;
+
+    // Helper info — useful for display, not for compatibility math
+    avgYear: number;
+    uniqueGenres: number;
+    avgPopularity: number;
+    topGenreShare: number;
+}
+
+export interface TrackSummary {
     id: string;
     name: string;
-    artists: Array<{ name: string }>;
+    artists: Array<{ id?: string; name: string }>;
     uri: string;
-    audio_features: AudioFeatures;
 }
 
 export interface VibeProfile {
     userId: string;
     displayName: string;
-    tracks: TrackWithFeatures[];
-    averageFeatures: AudioFeatures;
+    tracks: TrackSummary[];
+    metrics: VibeMetrics;
     topGenres: string[];
+    /** Average features kept here as a backward-compat view of metrics for
+     *  any old code that still expects this shape. New code reads `metrics`. */
+    averageFeatures: VibeMetrics;
     createdAt: Date;
 }
 
-/**
- * Fetches audio features for a list of tracks.
- * Throws on Spotify API errors so the caller can show a real error instead of
- * silently falling back to default-vibe values.
- */
-export async function getAudioFeatures(trackIds: string[]): Promise<AudioFeatures[]> {
-    // Spotify API allows up to 100 track IDs per request
-    const batches: string[][] = [];
-    for (let i = 0; i < trackIds.length; i += 100) {
-        batches.push(trackIds.slice(i, i + 100));
-    }
-
-    const responses = await Promise.all(
-        batches.map(batch =>
-            spotifyApiGet(`https://api.spotify.com/v1/audio-features?ids=${batch.join(',')}`)
-        )
-    );
-
-    const allFeatures: AudioFeatures[] = [];
-    for (const response of responses) {
-        if (response.audio_features) {
-            allFeatures.push(...response.audio_features.filter(Boolean));
-        }
-    }
-    return allFeatures;
+interface CreateVibeProfileInput {
+    userId: string;
+    displayName: string;
+    /** Top tracks combined across time ranges (already sorted by weighted score) */
+    tracks: any[];
+    /** Top artists combined across time ranges (with genres) */
+    artists: any[];
+    /** Short-term top track IDs — for recency-shift calculation */
+    shortTermTrackIds: string[];
+    /** Long-term top track IDs — for recency-shift calculation */
+    longTermTrackIds: string[];
 }
 
-/**
- * Creates a comprehensive vibe profile from user's tracks
- */
-export async function createVibeProfile(
-    userId: string,
-    displayName: string,
-    tracks: any[]
-): Promise<VibeProfile> {
+export function createVibeProfile(input: CreateVibeProfileInput): VibeProfile {
+    const { userId, displayName, tracks, artists, shortTermTrackIds, longTermTrackIds } = input;
     console.log('🧠 Creating vibe profile for', displayName);
 
-    // Extract track IDs
-    const trackIds = tracks.map(track => track.id).filter(Boolean);
-
-    // Get audio features
-    const audioFeatures = await getAudioFeatures(trackIds);
-
-    // Combine tracks with their audio features
-    const tracksWithFeatures: TrackWithFeatures[] = tracks.map((track, index) => ({
-        id: track.id,
-        name: track.name,
-        artists: track.artists,
-        uri: track.uri,
-        audio_features: audioFeatures[index] || getDefaultAudioFeatures()
-    })).filter(track => track.audio_features);
-
-    // Calculate average audio features (the "vibe vector")
-    const averageFeatures = calculateAverageFeatures(
-        tracksWithFeatures.map(t => t.audio_features)
-    );
-
-    // Extract top genres
-    const genres = tracks.flatMap(track =>
-        track.artists.flatMap((artist: any) => artist.genres || [])
-    );
-    const topGenres = getTopGenres(genres);
-
-    const profile: VibeProfile = {
-        userId,
-        displayName,
-        tracks: tracksWithFeatures,
-        averageFeatures,
-        topGenres,
-        createdAt: new Date()
-    };
+    const metrics = computeMetrics(tracks, artists, shortTermTrackIds, longTermTrackIds);
+    const topGenres = extractTopGenres(artists);
+    const trackSummaries: TrackSummary[] = tracks.map(t => ({
+        id: t.id,
+        name: t.name,
+        artists: (t.artists || []).map((a: any) => ({ id: a.id, name: a.name })),
+        uri: t.uri,
+    }));
 
     console.log('✅ Vibe profile created:', {
-        tracks: profile.tracks.length,
-        topGenres: profile.topGenres,
-        averageEnergy: profile.averageFeatures.energy.toFixed(2),
-        averageValence: profile.averageFeatures.valence.toFixed(2)
+        tracks: trackSummaries.length,
+        topGenres: topGenres.slice(0, 3),
+        mainstream: metrics.mainstream.toFixed(2),
+        modernity: metrics.modernity.toFixed(2),
+        diversity: metrics.diversity.toFixed(2),
     });
 
-    return profile;
+    return {
+        userId,
+        displayName,
+        tracks: trackSummaries,
+        metrics,
+        averageFeatures: metrics,
+        topGenres,
+        createdAt: new Date(),
+    };
 }
 
-/**
- * Calculates compatibility score between two vibe profiles
- */
-export function calculateCompatibilityScore(
-    profile1: VibeProfile,
-    profile2: VibeProfile
-): number {
-    console.log(`🤝 Calculating compatibility: ${profile1.displayName} ↔ ${profile2.displayName}`);
+// --- Metric computation ------------------------------------------------------
 
-    // 1. Audio Features Similarity (70% weight)
-    const audioSimilarity = calculateCosineSimilarity(
-        profile1.averageFeatures,
-        profile2.averageFeatures
-    );
+function computeMetrics(
+    tracks: any[],
+    artists: any[],
+    shortTermIds: string[],
+    longTermIds: string[]
+): VibeMetrics {
+    const safeTracks = tracks.filter(Boolean);
+    const safeArtists = artists.filter(Boolean);
 
-    // 2. Genre Overlap (20% weight)
-    const genreSimilarity = calculateGenreSimilarity(
-        profile1.topGenres,
-        profile2.topGenres
-    );
+    // 1. mainstream — average track popularity (0-100)
+    const popularities = safeTracks.map(t => t.popularity ?? 0);
+    const avgPopularity = mean(popularities);
+    const mainstream = clamp01(avgPopularity / 100);
 
-    // 3. Common Tracks Bonus (10% weight)
-    const trackSimilarity = calculateTrackSimilarity(
-        profile1.tracks,
-        profile2.tracks
-    );
+    // 2. modernity — average release year, normalized 1960..currentYear → 0..1
+    const years = safeTracks
+        .map(t => extractYear(t.album?.release_date))
+        .filter((y): y is number => y != null);
+    const avgYear = years.length ? mean(years) : new Date().getFullYear();
+    const currentYear = new Date().getFullYear();
+    const modernity = clamp01((avgYear - 1960) / Math.max(currentYear - 1960, 1));
 
-    // Weighted final score
-    const finalScore = (
-        audioSimilarity * 0.7 +
-        genreSimilarity * 0.2 +
-        trackSimilarity * 0.1
-    ) * 100;
-
-    console.log(`📊 Compatibility breakdown:`, {
-        audioSimilarity: (audioSimilarity * 100).toFixed(1) + '%',
-        genreSimilarity: (genreSimilarity * 100).toFixed(1) + '%',
-        trackSimilarity: (trackSimilarity * 100).toFixed(1) + '%',
-        finalScore: finalScore.toFixed(1) + '%'
+    // 3. diversity — Shannon entropy of artist genres, weighted by artist rank
+    const genreWeights: Record<string, number> = {};
+    safeArtists.forEach((a, idx) => {
+        const w = safeArtists.length - idx;
+        (a.genres || []).forEach((g: string) => {
+            const key = g.toLowerCase().trim();
+            if (!key) return;
+            genreWeights[key] = (genreWeights[key] || 0) + w;
+        });
     });
+    const totalWeight = Object.values(genreWeights).reduce((a, b) => a + b, 0);
+    let entropy = 0;
+    Object.values(genreWeights).forEach(w => {
+        const p = w / totalWeight;
+        if (p > 0) entropy -= p * Math.log2(p);
+    });
+    const uniqueGenres = Object.keys(genreWeights).length;
+    const maxEntropy = Math.log2(Math.max(uniqueGenres, 2));
+    const diversity = clamp01(maxEntropy > 0 ? entropy / maxEntropy : 0);
 
-    return Math.round(finalScore);
-}
+    // 4. recencyShift — fraction of short-term top tracks absent from long-term
+    const longSet = new Set(longTermIds);
+    const onlyShort = shortTermIds.filter(id => !longSet.has(id));
+    const recencyShift = clamp01(
+        shortTermIds.length > 0 ? onlyShort.length / shortTermIds.length : 0
+    );
 
-/**
- * Calculates cosine similarity between two audio feature vectors
- */
-function calculateCosineSimilarity(features1: AudioFeatures, features2: AudioFeatures): number {
-    // Convert audio features to normalized vectors
-    const vector1 = audioFeaturesToVector(features1);
-    const vector2 = audioFeaturesToVector(features2);
+    // 5. artistConcentration — Herfindahl on top tracks' lead artists
+    const artistTrackCounts: Record<string, number> = {};
+    safeTracks.forEach(t => {
+        const aid = t.artists?.[0]?.id || t.artists?.[0]?.name || 'unknown';
+        artistTrackCounts[aid] = (artistTrackCounts[aid] || 0) + 1;
+    });
+    const totalTracks = safeTracks.length || 1;
+    const hhi = Object.values(artistTrackCounts).reduce((sum, c) => {
+        const share = c / totalTracks;
+        return sum + share * share;
+    }, 0);
+    const uniqueArtists = Math.max(Object.keys(artistTrackCounts).length, 1);
+    const minHHI = 1 / uniqueArtists;
+    const artistConcentration = clamp01(
+        uniqueArtists > 1 ? (hhi - minHHI) / (1 - minHHI) : 0
+    );
 
-    // Calculate dot product
-    let dotProduct = 0;
-    for (let i = 0; i < vector1.length; i++) {
-        dotProduct += vector1[i] * vector2[i];
+    // 6. eraSpread — std-dev of years, normalized so 30y std → 1.0
+    let eraSpread = 0;
+    if (years.length > 1) {
+        const variance =
+            years.reduce((sum, y) => sum + (y - avgYear) ** 2, 0) / years.length;
+        const std = Math.sqrt(variance);
+        eraSpread = clamp01(std / 30);
     }
 
-    // Calculate magnitudes
-    const magnitude1 = Math.sqrt(vector1.reduce((sum, val) => sum + val * val, 0));
-    const magnitude2 = Math.sqrt(vector2.reduce((sum, val) => sum + val * val, 0));
+    // Helpers
+    const sortedGenres = Object.entries(genreWeights).sort(([, a], [, b]) => b - a);
+    const topGenreShare = clamp01(
+        totalWeight > 0 && sortedGenres.length > 0
+            ? sortedGenres[0][1] / totalWeight
+            : 0
+    );
 
-    // Avoid division by zero
-    if (magnitude1 === 0 || magnitude2 === 0) return 0;
-
-    // Return cosine similarity
-    return dotProduct / (magnitude1 * magnitude2);
-}
-
-/**
- * Converts audio features to a normalized vector for comparison
- */
-function audioFeaturesToVector(features: AudioFeatures): number[] {
-    return [
-        features.acousticness,
-        features.danceability,
-        features.energy,
-        features.instrumentalness,
-        features.liveness,
-        features.loudness / 60 + 1, // Normalize loudness (-60 to 0 dB)
-        features.speechiness,
-        features.tempo / 200, // Normalize tempo (typically 0-200 BPM)
-        features.valence,
-        features.key / 11, // Normalize key (0-11)
-        features.mode, // Already 0 or 1
-        features.time_signature / 7 // Normalize time signature (typically 3-7)
-    ];
-}
-
-/**
- * Calculates genre similarity between two genre lists
- */
-function calculateGenreSimilarity(genres1: string[], genres2: string[]): number {
-    if (genres1.length === 0 && genres2.length === 0) return 1;
-    if (genres1.length === 0 || genres2.length === 0) return 0;
-
-    const set1 = new Set(genres1.map(g => g.toLowerCase()));
-    const set2 = new Set(genres2.map(g => g.toLowerCase()));
-
-    const intersection = new Set([...set1].filter(x => set2.has(x)));
-    const union = new Set([...set1, ...set2]);
-
-    return intersection.size / union.size; // Jaccard similarity
-}
-
-/**
- * Calculates track similarity (common tracks bonus)
- */
-function calculateTrackSimilarity(tracks1: TrackWithFeatures[], tracks2: TrackWithFeatures[]): number {
-    const uris1 = new Set(tracks1.map(t => t.uri));
-    const uris2 = new Set(tracks2.map(t => t.uri));
-
-    const commonTracks = [...uris1].filter(uri => uris2.has(uri)).length;
-    const totalTracks = Math.max(tracks1.length, tracks2.length);
-
-    return totalTracks > 0 ? commonTracks / totalTracks : 0;
-}
-
-/**
- * Calculates average audio features from an array of features
- */
-function calculateAverageFeatures(featuresArray: AudioFeatures[]): AudioFeatures {
-    if (featuresArray.length === 0) return getDefaultAudioFeatures();
-
-    const sums = featuresArray.reduce((acc, features) => ({
-        acousticness: acc.acousticness + features.acousticness,
-        danceability: acc.danceability + features.danceability,
-        energy: acc.energy + features.energy,
-        instrumentalness: acc.instrumentalness + features.instrumentalness,
-        liveness: acc.liveness + features.liveness,
-        loudness: acc.loudness + features.loudness,
-        speechiness: acc.speechiness + features.speechiness,
-        tempo: acc.tempo + features.tempo,
-        valence: acc.valence + features.valence,
-        key: acc.key + features.key,
-        mode: acc.mode + features.mode,
-        time_signature: acc.time_signature + features.time_signature
-    }), getDefaultAudioFeatures());
-
-    const count = featuresArray.length;
     return {
-        acousticness: sums.acousticness / count,
-        danceability: sums.danceability / count,
-        energy: sums.energy / count,
-        instrumentalness: sums.instrumentalness / count,
-        liveness: sums.liveness / count,
-        loudness: sums.loudness / count,
-        speechiness: sums.speechiness / count,
-        tempo: sums.tempo / count,
-        valence: sums.valence / count,
-        key: Math.round(sums.key / count),
-        mode: Math.round(sums.mode / count),
-        time_signature: Math.round(sums.time_signature / count)
+        mainstream,
+        modernity,
+        diversity,
+        recencyShift,
+        artistConcentration,
+        eraSpread,
+        avgYear: Math.round(avgYear),
+        uniqueGenres,
+        avgPopularity: Math.round(avgPopularity),
+        topGenreShare,
     };
 }
 
-/**
- * Extracts top genres from a list with frequency counting
- */
-function getTopGenres(genres: string[]): string[] {
-    const genreCounts: { [key: string]: number } = {};
+// --- Compatibility -----------------------------------------------------------
 
-    genres.forEach(genre => {
-        const normalizedGenre = genre.toLowerCase().trim();
-        genreCounts[normalizedGenre] = (genreCounts[normalizedGenre] || 0) + 1;
-    });
-
-    return Object.entries(genreCounts)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5)
-        .map(([genre]) => genre);
-}
-
-/**
- * Returns default audio features (neutral values)
- */
-function getDefaultAudioFeatures(): AudioFeatures {
-    return {
-        acousticness: 0.5,
-        danceability: 0.5,
-        energy: 0.5,
-        instrumentalness: 0.5,
-        liveness: 0.5,
-        loudness: -10,
-        speechiness: 0.5,
-        tempo: 120,
-        valence: 0.5,
-        key: 5,
-        mode: 1,
-        time_signature: 4
-    };
-}
-
-/**
- * Lightweight compatibility score using only averageFeatures + topGenres.
- * For use with the /api/users summary payload, where full track lists aren't
- * returned. Matches calculateCompatibilityScore's logic but rebalances weights
- * (audio 78%, genre 22%) so the score still sums to 100%.
- */
 export function calculateLightCompatibility(
-    a: { averageFeatures: AudioFeatures; topGenres: string[] },
-    b: { averageFeatures: AudioFeatures; topGenres: string[] }
+    a: { metrics?: VibeMetrics; averageFeatures?: VibeMetrics; topGenres: string[] },
+    b: { metrics?: VibeMetrics; averageFeatures?: VibeMetrics; topGenres: string[] }
 ): number {
-    const audioSimilarity = calculateCosineSimilarity(a.averageFeatures, b.averageFeatures);
-    const genreSimilarity = calculateGenreSimilarity(a.topGenres, b.topGenres);
-    const score = (audioSimilarity * 0.78 + genreSimilarity * 0.22) * 100;
-    return Math.round(score);
+    const ma = (a.metrics || a.averageFeatures) as VibeMetrics | undefined;
+    const mb = (b.metrics || b.averageFeatures) as VibeMetrics | undefined;
+    if (!ma || !mb || !isVibeMetrics(ma) || !isVibeMetrics(mb)) return 0;
+
+    const metricSim = cosineSimilarity(metricsToVector(ma), metricsToVector(mb));
+    const genreSim = calculateGenreSimilarity(a.topGenres || [], b.topGenres || []);
+    return Math.round((metricSim * 0.7 + genreSim * 0.3) * 100);
 }
 
-/**
- * Detailed compatibility breakdown for the /compare view. Returns the
- * underlying similarities so the UI can highlight what specifically
- * matches between two listeners.
- */
 export interface CompatBreakdown {
     score: number;
-    audio: number;        // 0..100
-    genre: number;        // 0..100
+    audio: number; // kept name "audio" so existing UI labels still work
+    genre: number;
     sharedGenres: string[];
-    /** Per-feature deltas in 0..1 space, useful for "you both run hot on energy" copy */
+    /** Per-metric absolute deltas in 0..1 space */
     featureDeltas: {
-        energy: number;
-        valence: number;
-        danceability: number;
-        acousticness: number;
-        instrumentalness: number;
+        mainstream: number;
+        modernity: number;
+        diversity: number;
+        recencyShift: number;
+        eraSpread: number;
     };
 }
 
 export function calculateCompatBreakdown(
-    a: { averageFeatures: AudioFeatures; topGenres: string[] },
-    b: { averageFeatures: AudioFeatures; topGenres: string[] }
+    a: { metrics?: VibeMetrics; averageFeatures?: VibeMetrics; topGenres: string[] },
+    b: { metrics?: VibeMetrics; averageFeatures?: VibeMetrics; topGenres: string[] }
 ): CompatBreakdown {
-    const audio = calculateCosineSimilarity(a.averageFeatures, b.averageFeatures);
-    const genre = calculateGenreSimilarity(a.topGenres, b.topGenres);
-    const score = Math.round((audio * 0.78 + genre * 0.22) * 100);
+    const ma = (a.metrics || a.averageFeatures) as VibeMetrics;
+    const mb = (b.metrics || b.averageFeatures) as VibeMetrics;
+    const safe = isVibeMetrics(ma) && isVibeMetrics(mb);
+    const metricSim = safe ? cosineSimilarity(metricsToVector(ma), metricsToVector(mb)) : 0;
+    const genreSim = calculateGenreSimilarity(a.topGenres || [], b.topGenres || []);
+    const score = Math.round((metricSim * 0.7 + genreSim * 0.3) * 100);
 
     const setA = new Set((a.topGenres || []).map(g => g.toLowerCase()));
     const setB = new Set((b.topGenres || []).map(g => g.toLowerCase()));
     const sharedGenres = [...setA].filter(g => setB.has(g));
 
-    const fa = a.averageFeatures;
-    const fb = b.averageFeatures;
-    const featureDeltas = {
-        energy: Math.abs(fa.energy - fb.energy),
-        valence: Math.abs(fa.valence - fb.valence),
-        danceability: Math.abs(fa.danceability - fb.danceability),
-        acousticness: Math.abs(fa.acousticness - fb.acousticness),
-        instrumentalness: Math.abs(fa.instrumentalness - fb.instrumentalness),
-    };
-
     return {
         score,
-        audio: Math.round(audio * 100),
-        genre: Math.round(genre * 100),
+        audio: Math.round(metricSim * 100),
+        genre: Math.round(genreSim * 100),
         sharedGenres,
-        featureDeltas,
+        featureDeltas: safe
+            ? {
+                  mainstream: Math.abs(ma.mainstream - mb.mainstream),
+                  modernity: Math.abs(ma.modernity - mb.modernity),
+                  diversity: Math.abs(ma.diversity - mb.diversity),
+                  recencyShift: Math.abs(ma.recencyShift - mb.recencyShift),
+                  eraSpread: Math.abs(ma.eraSpread - mb.eraSpread),
+              }
+            : { mainstream: 1, modernity: 1, diversity: 1, recencyShift: 1, eraSpread: 1 },
     };
 }
 
-/**
- * Mock function to simulate finding users with compatible vibes
- */
-export function findCompatibleUsers(userProfile: VibeProfile, allProfiles: VibeProfile[]): Array<{
-    user: VibeProfile;
-    compatibilityScore: number;
-}> {
-    return allProfiles
-        .filter(profile => profile.userId !== userProfile.userId)
-        .map(profile => ({
-            user: profile,
-            compatibilityScore: calculateCompatibilityScore(userProfile, profile)
-        }))
-        .filter(result => result.compatibilityScore >= 70) // Only show 70%+ matches
-        .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+// --- Helpers ----------------------------------------------------------------
+
+function metricsToVector(m: VibeMetrics): number[] {
+    return [
+        m.mainstream,
+        m.modernity,
+        m.diversity,
+        m.recencyShift,
+        m.artistConcentration,
+        m.eraSpread,
+    ];
+}
+
+function isVibeMetrics(x: any): x is VibeMetrics {
+    return (
+        x &&
+        typeof x === 'object' &&
+        typeof x.mainstream === 'number' &&
+        typeof x.modernity === 'number'
+    );
+}
+
+function cosineSimilarity(v1: number[], v2: number[]): number {
+    let dot = 0,
+        m1 = 0,
+        m2 = 0;
+    for (let i = 0; i < v1.length; i++) {
+        dot += v1[i] * v2[i];
+        m1 += v1[i] * v1[i];
+        m2 += v2[i] * v2[i];
+    }
+    if (m1 === 0 || m2 === 0) return 0;
+    return dot / (Math.sqrt(m1) * Math.sqrt(m2));
+}
+
+function calculateGenreSimilarity(g1: string[], g2: string[]): number {
+    if (g1.length === 0 && g2.length === 0) return 1;
+    if (g1.length === 0 || g2.length === 0) return 0;
+    const s1 = new Set(g1.map(g => g.toLowerCase()));
+    const s2 = new Set(g2.map(g => g.toLowerCase()));
+    const inter = new Set([...s1].filter(x => s2.has(x)));
+    const union = new Set([...s1, ...s2]);
+    return inter.size / union.size;
+}
+
+function extractTopGenres(artists: any[]): string[] {
+    const weights: Record<string, number> = {};
+    artists.forEach((a, idx) => {
+        const w = artists.length - idx;
+        (a.genres || []).forEach((g: string) => {
+            const key = g.toLowerCase().trim();
+            if (!key) return;
+            weights[key] = (weights[key] || 0) + w;
+        });
+    });
+    return Object.entries(weights)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([g]) => g);
+}
+
+function extractYear(s: string | undefined): number | null {
+    if (!s) return null;
+    const y = parseInt(s.slice(0, 4), 10);
+    return Number.isFinite(y) && y > 1900 && y <= 2100 ? y : null;
+}
+
+function mean(xs: number[]): number {
+    if (xs.length === 0) return 0;
+    return xs.reduce((a, b) => a + b, 0) / xs.length;
+}
+
+function clamp01(x: number): number {
+    return Math.max(0, Math.min(1, x));
+}
+
+// --- Default empty profile (for type-only fallbacks) -----------------------
+
+export function getEmptyVibeMetrics(): VibeMetrics {
+    return {
+        mainstream: 0.5,
+        modernity: 0.5,
+        diversity: 0.5,
+        recencyShift: 0,
+        artistConcentration: 0,
+        eraSpread: 0,
+        avgYear: new Date().getFullYear(),
+        uniqueGenres: 0,
+        avgPopularity: 50,
+        topGenreShare: 0,
+    };
 }

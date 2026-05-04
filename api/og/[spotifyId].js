@@ -45,10 +45,11 @@ export default async function handler(req) {
 function renderCard(user) {
   const gradient = user.vibe_gradient || FALLBACK_GRADIENT;
 
-  // Mirror getContrastTextColor: lightness comes from valence.
-  // valence < ~0.4 → dark gradient → use white. Else black.
-  const valence = user.average_features?.valence;
-  const useWhiteText = valence == null ? true : lerp(25, 55, valence) < 45;
+  // Mirror getContrastTextColor for both v2.16 metrics shape and legacy
+  // audio-features shape so old saved cards still render with correct
+  // contrast when shared.
+  const f = user.average_features || {};
+  const useWhiteText = pickWhiteText(f);
   const text = useWhiteText ? '#ffffff' : '#000000';
   const subtle = useWhiteText ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
 
@@ -149,4 +150,19 @@ function renderCard(user) {
 
 function lerp(a, b, t) {
   return a + (b - a) * Math.max(0, Math.min(1, t));
+}
+
+function pickWhiteText(f) {
+  if (!f || typeof f !== 'object') return true;
+  // New shape: VibeMetrics
+  if (typeof f.mainstream === 'number') {
+    const lightness = lerp(22, 48, f.mainstream * 0.7 + (f.modernity ?? 0.5) * 0.3);
+    return lightness < 38;
+  }
+  // Legacy shape: AudioFeatures
+  if (typeof f.valence === 'number') {
+    const lightness = lerp(25, 55, f.valence);
+    return lightness < 45;
+  }
+  return true;
 }

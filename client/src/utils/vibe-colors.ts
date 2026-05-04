@@ -1,4 +1,4 @@
-import type { AudioFeatures } from './vibe-analysis';
+import type { VibeMetrics } from './vibe-analysis';
 
 interface VibeGradient {
   from: string;
@@ -9,66 +9,99 @@ interface VibeGradient {
 }
 
 /**
- * Generates a color gradient based on audio features.
+ * Generates a 3-stop linear gradient from VibeMetrics.
  *
- * Energy → warmth (cool blues → hot reds/oranges)
- * Valence → saturation (muted/dark → bright/vivid)
- * Danceability → secondary hue shift
- * Acousticness → earthiness
+ * Modernity drives the primary hue:
+ *   0.0 → deep amber/sepia (retro)
+ *   0.5 → teal/blue (timeless mid)
+ *   1.0 → magenta/electric (very current)
+ *
+ * Mainstream drives saturation + lightness — top-of-charts feels brighter
+ * and more vivid; underground feels deeper and moodier.
+ *
+ * Diversity nudges the secondary hue away from the primary so polymath
+ * vibes get more rainbow movement; monogenre vibes feel monochromatic.
+ *
+ * Recency-shift adds a third "spark" hue at the gradient's tail.
  */
-export function getVibeGradient(features: AudioFeatures): VibeGradient {
-  const { energy, valence, danceability, acousticness } = features;
+export function getVibeGradient(m: VibeMetrics): VibeGradient {
+  const { mainstream, modernity, diversity, recencyShift } = m;
 
-  // Map energy to hue: low energy = cool (220-260), high energy = warm (0-40, 340-360)
-  const energyHue = energy > 0.5
-    ? lerp(40, 0, (energy - 0.5) * 2) // warm: orange → red
-    : lerp(260, 40, energy * 2); // cool: blue → orange
+  const primaryHue =
+    modernity > 0.5
+      ? lerp(180, 320, (modernity - 0.5) * 2) // teal → magenta
+      : lerp(15, 200, modernity * 2);          // amber → teal
 
-  // Valence affects saturation and lightness
-  const saturation = lerp(40, 90, valence);
-  const lightness = lerp(25, 55, valence);
+  const saturation = lerp(35, 90, mainstream);
+  const lightness = lerp(22, 48, mainstream * 0.7 + modernity * 0.3);
 
-  // Danceability shifts the secondary color
-  const danceHue = (energyHue + lerp(30, 90, danceability)) % 360;
+  const secondaryHue = (primaryHue + lerp(20, 130, diversity)) % 360;
+  const tertiaryHue = (primaryHue + lerp(180, 220, recencyShift)) % 360;
 
-  // Acousticness pulls toward earthy/green tones
-  const accentHue = acousticness > 0.5
-    ? lerp(danceHue, 140, (acousticness - 0.5) * 2) // pull toward green
-    : lerp(danceHue, 280, (0.5 - acousticness) * 2); // pull toward purple
+  const from = `hsl(${Math.round(primaryHue)}, ${Math.round(saturation)}%, ${Math.round(lightness)}%)`;
+  const via = `hsl(${Math.round(secondaryHue)}, ${Math.round(saturation * 0.85)}%, ${Math.round(lightness * 1.15)}%)`;
+  const to = `hsl(${Math.round(tertiaryHue)}, ${Math.round(saturation * 0.7)}%, ${Math.round(lightness * 0.85)}%)`;
 
-  const from = `hsl(${Math.round(energyHue)}, ${Math.round(saturation)}%, ${Math.round(lightness)}%)`;
-  const via = `hsl(${Math.round(danceHue)}, ${Math.round(saturation * 0.9)}%, ${Math.round(lightness * 1.1)}%)`;
-  const to = `hsl(${Math.round(accentHue)}, ${Math.round(saturation * 0.8)}%, ${Math.round(lightness * 0.9)}%)`;
-
-  const css = `linear-gradient(135deg, ${from}, ${via}, ${to})`;
-
-  return { from, via, to, css, name: getGradientName(energy, valence, acousticness) };
+  return {
+    from,
+    via,
+    to,
+    css: `linear-gradient(135deg, ${from}, ${via}, ${to})`,
+    name: getGradientName(m),
+  };
 }
 
 /**
- * Gets a text color (white or black) that contrasts well with the gradient.
+ * Returns a text color (white or black) that contrasts well with the gradient.
+ * Bright/saturated gradients want black text; deep/muted ones want white.
  */
-export function getContrastTextColor(features: AudioFeatures): string {
-  const lightness = lerp(25, 55, features.valence);
-  return lightness < 45 ? '#ffffff' : '#000000';
+export function getContrastTextColor(m: VibeMetrics): string {
+  const lightness = lerp(22, 48, m.mainstream * 0.7 + m.modernity * 0.3);
+  return lightness < 38 ? '#ffffff' : '#000000';
+}
+
+export function getSubtleTextColor(m: VibeMetrics): string {
+  const lightness = lerp(22, 48, m.mainstream * 0.7 + m.modernity * 0.3);
+  return lightness < 38 ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
 }
 
 /**
- * Gets a subtle text color for secondary content.
+ * Adapts either the new VibeMetrics shape or a legacy AudioFeatures-shaped
+ * object into something the contrast helpers can read. Maps valence→mainstream
+ * and energy→modernity as a rough approximation so old saved cards don't
+ * render with broken contrast.
  */
-export function getSubtleTextColor(features: AudioFeatures): string {
-  const lightness = lerp(25, 55, features.valence);
-  return lightness < 45 ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
+export function asColorRef(features: any): VibeMetrics {
+  if (!features || typeof features !== 'object') {
+    return { mainstream: 0.5, modernity: 0.5 } as VibeMetrics;
+  }
+  if (typeof features.mainstream === 'number') {
+    return features as VibeMetrics;
+  }
+  return {
+    mainstream: features.valence ?? 0.5,
+    modernity: features.energy ?? 0.5,
+    diversity: 0.5,
+    recencyShift: 0,
+    artistConcentration: 0,
+    eraSpread: 0,
+    avgYear: new Date().getFullYear(),
+    uniqueGenres: 0,
+    avgPopularity: 50,
+    topGenreShare: 0,
+  };
 }
 
-function getGradientName(energy: number, valence: number, acousticness: number): string {
-  if (energy > 0.7 && valence > 0.7) return 'Golden Hour';
-  if (energy > 0.7 && valence < 0.3) return 'Midnight Fire';
-  if (energy < 0.3 && valence > 0.7) return 'Morning Dew';
-  if (energy < 0.3 && valence < 0.3) return 'Deep Ocean';
-  if (acousticness > 0.7) return 'Forest Floor';
-  if (energy > 0.5 && valence > 0.5) return 'Sunset Drive';
-  if (energy < 0.5 && valence < 0.5) return 'Twilight';
+function getGradientName(m: VibeMetrics): string {
+  const { mainstream, modernity, diversity, recencyShift } = m;
+  if (recencyShift > 0.6) return 'Hot Take';
+  if (diversity > 0.8) return 'Spectrum';
+  if (mainstream > 0.7 && modernity > 0.7) return 'Neon Pop';
+  if (mainstream > 0.7 && modernity < 0.4) return 'Golden Hour';
+  if (mainstream < 0.4 && modernity > 0.7) return 'Underground Glow';
+  if (mainstream < 0.4 && modernity < 0.4) return 'Sepia Soul';
+  if (modernity > 0.6) return 'Modern';
+  if (modernity < 0.4) return 'Vintage';
   return 'Nebula';
 }
 

@@ -54,8 +54,8 @@ export default async function handler(req) {
 function renderCompare(a, b, score) {
   const gradA = a.vibe_gradient || FALLBACK_GRADIENT;
   const gradB = b.vibe_gradient || FALLBACK_GRADIENT;
-  const textA = useWhite(a.average_features?.valence) ? '#ffffff' : '#000000';
-  const textB = useWhite(b.average_features?.valence) ? '#ffffff' : '#000000';
+  const textA = pickWhiteText(a.average_features) ? '#ffffff' : '#000000';
+  const textB = pickWhiteText(b.average_features) ? '#ffffff' : '#000000';
 
   return new ImageResponse(
     {
@@ -255,20 +255,38 @@ function renderCompare(a, b, score) {
 
 // --- Helpers (mirror the client-side math so OG renders match the UI) ---
 
-function useWhite(valence) {
-  if (valence == null) return true;
-  const lightness = 25 + (55 - 25) * Math.max(0, Math.min(1, valence));
-  return lightness < 45;
+function pickWhiteText(f) {
+  if (!f || typeof f !== 'object') return true;
+  if (typeof f.mainstream === 'number') {
+    const lightness = 22 + (48 - 22) * Math.max(0, Math.min(1, f.mainstream * 0.7 + (f.modernity ?? 0.5) * 0.3));
+    return lightness < 38;
+  }
+  if (typeof f.valence === 'number') {
+    const lightness = 25 + (55 - 25) * Math.max(0, Math.min(1, f.valence));
+    return lightness < 45;
+  }
+  return true;
 }
 
 function computeScore(fa, fb, gA, gB) {
   if (!fa || !fb) return null;
   const audio = cosineSimilarity(featuresToVector(fa), featuresToVector(fb));
   const genre = jaccard(gA || [], gB || []);
-  return Math.round((audio * 0.78 + genre * 0.22) * 100);
+  return Math.round((audio * 0.7 + genre * 0.3) * 100);
 }
 
 function featuresToVector(f) {
+  // Detect new metrics shape vs legacy audio features.
+  if (typeof f.mainstream === 'number') {
+    return [
+      f.mainstream ?? 0.5,
+      f.modernity ?? 0.5,
+      f.diversity ?? 0.5,
+      f.recencyShift ?? 0,
+      f.artistConcentration ?? 0,
+      f.eraSpread ?? 0,
+    ];
+  }
   return [
     f.acousticness ?? 0.5,
     f.danceability ?? 0.5,

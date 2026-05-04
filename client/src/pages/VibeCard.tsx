@@ -76,11 +76,11 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
     if (!vibeData?.average_features || !viewerVibe?.average_features) return null;
     return calculateLightCompatibility(
       {
-        averageFeatures: viewerVibe.average_features as any,
+        metrics: viewerVibe.average_features as any,
         topGenres: viewerVibe.top_genres || [],
       },
       {
-        averageFeatures: vibeData.average_features as any,
+        metrics: vibeData.average_features as any,
         topGenres: vibeData.top_genres || [],
       }
     );
@@ -170,11 +170,11 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
             user: u,
             score: calculateLightCompatibility(
               {
-                averageFeatures: vibeData.average_features as any,
+                metrics: vibeData.average_features as any,
                 topGenres: vibeData.top_genres || [],
               },
               {
-                averageFeatures: u.average_features as any,
+                metrics: u.average_features as any,
                 topGenres: u.top_genres || [],
               }
             ),
@@ -297,12 +297,24 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
         return;
       }
 
-      // Create vibe profile (audio features analysis)
-      const profile = await createVibeProfile(currentUser.id, currentUser.display_name, sortedTracks);
+      // Build the vibe profile from metadata (no /audio-features — Spotify
+      // revoked it for our app). Pass the raw responses we need: combined
+      // top tracks, combined top artists (with genres), and the short/long
+      // term track ID lists for recency-shift calculation.
+      const shortIds = (shortTerm.items || []).map((t: any) => t.id).filter(Boolean);
+      const longIds = (longTerm.items || []).map((t: any) => t.id).filter(Boolean);
+      const profile = createVibeProfile({
+        userId: currentUser.id,
+        displayName: currentUser.display_name,
+        tracks: sortedTracks,
+        artists: topArtistsRaw,
+        shortTermTrackIds: shortIds,
+        longTermTrackIds: longIds,
+      });
 
-      // Generate vibe label and gradient
-      const vibeLabel = getVibeLabel(profile.averageFeatures);
-      const gradient = getVibeGradient(profile.averageFeatures);
+      // Generate vibe label and gradient from the new metrics
+      const vibeLabel = getVibeLabel(profile.metrics);
+      const gradient = getVibeGradient(profile.metrics);
 
       // Create Spotify playlist
       let playlistId = currentUser.playlistId;
@@ -334,23 +346,6 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
         uri: t.uri,
       }));
 
-      // Re-derive top genres from top_artists (which include genre data,
-      // unlike the sparse artist refs on top_tracks). Falls back to whatever
-      // createVibeProfile got from track metadata if no artist genres exist.
-      const artistGenreCounts: Record<string, number> = {};
-      topArtistsRaw.forEach((a: any, idx: number) => {
-        const weight = topArtistsRaw.length - idx; // higher rank → more weight
-        (a.genres || []).forEach((g: string) => {
-          const key = g.toLowerCase().trim();
-          artistGenreCounts[key] = (artistGenreCounts[key] || 0) + weight;
-        });
-      });
-      const richTopGenres = Object.entries(artistGenreCounts)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5)
-        .map(([g]) => g);
-      const finalTopGenres = richTopGenres.length > 0 ? richTopGenres : profile.topGenres;
-
       const data: VibeData = {
         spotify_id: currentUser.id,
         display_name: currentUser.display_name,
@@ -358,9 +353,11 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
         playlist_id: playlistId || null,
         vibe_label: `${vibeLabel.emoji} ${vibeLabel.label}`,
         vibe_gradient: gradient.css,
-        average_features: profile.averageFeatures as any,
+        // average_features now stores VibeMetrics (mainstream/modernity/...).
+        // The DB column is JSONB so the shape change is invisible to Postgres.
+        average_features: profile.metrics as any,
         top_tracks: top5,
-        top_genres: finalTopGenres,
+        top_genres: profile.topGenres,
         top_artists: topArtists,
       };
 
@@ -383,14 +380,9 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
           navigate('/');
           return;
         }
-        // Audio-features deprecated for apps created after 2024-11-27 — surface
-        // it explicitly so we don't silently render default-vibe cards.
-        if (err instanceof SpotifyApiError && err.endpoint.includes('/audio-features')) {
-          setError(
-            err.status === 403
-              ? 'Spotify has retired the audio-features API for this app. The vibe engine needs a different data source.'
-              : `Spotify audio-features error (${err.status}): ${err.spotifyMessage}`
-          );
+        // Surface specific Spotify error if any — otherwise generic fallback.
+        if (err instanceof SpotifyApiError) {
+          setError(`Spotify error on ${err.endpoint} (${err.status}): ${err.spotifyMessage}`);
         } else {
           setError('Failed to generate your vibe. Try refreshing.');
         }
@@ -509,20 +501,35 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   }
 
   // --- Parse data ---
-  const features = vibeData.average_features || {};
+  const features = (vibeData.average_features || {}) as any;
   const gradient = vibeData.vibe_gradient || 'linear-gradient(135deg, #1a1a2e, #16213e, #0f3460)';
-  const textColor = features.valence != null ? getContrastTextColor(features as any) : '#ffffff';
-  const subtleColor = features.valence != null ? getSubtleTextColor(features as any) : 'rgba(255,255,255,0.6)';
+  // Detect new metric shape vs legacy audio-features shape
+  const isNewMetrics = features.mainstream != null;
+  const colorRef = isNewMetrics
+    ? (features as any)
+    : { mainstream: features.valence ?? 0.5, modernity: features.energy ?? 0.5 };
+  const textColor = getContrastTextColor(colorRef as any);
+  const subtleColor = getSubtleTextColor(colorRef as any);
   const topTracks = vibeData.top_tracks || [];
   const topGenres = vibeData.top_genres || [];
   const topArtists = vibeData.top_artists || [];
 
-  const meters = [
-    { label: 'Energy', value: features.energy || 0 },
-    { label: 'Mood', value: features.valence || 0 },
-    { label: 'Dance', value: features.danceability || 0 },
-    { label: 'Acoustic', value: features.acousticness || 0 },
-  ];
+  // Meters reflect the v2.16 vibe model (mainstream / modernity / diversity / activity).
+  // Legacy rows (pre-v2.16) fall back to whatever audio-feature numbers they have
+  // so old saved cards don't render with all-zero bars.
+  const meters = isNewMetrics
+    ? [
+        { label: 'Mainstream', value: features.mainstream ?? 0 },
+        { label: 'Modern', value: features.modernity ?? 0 },
+        { label: 'Eclectic', value: features.diversity ?? 0 },
+        { label: 'Discovery', value: features.recencyShift ?? 0 },
+      ]
+    : [
+        { label: 'Energy', value: features.energy ?? 0 },
+        { label: 'Mood', value: features.valence ?? 0 },
+        { label: 'Dance', value: features.danceability ?? 0 },
+        { label: 'Acoustic', value: features.acousticness ?? 0 },
+      ];
 
   return (
     <div className="min-h-screen" style={{ background: gradient }}>

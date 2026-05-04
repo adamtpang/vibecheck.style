@@ -5,7 +5,7 @@ import { getVibe } from '../utils/api';
 import type { VibeData } from '../utils/api';
 import { calculateCompatBreakdown } from '../utils/vibe-analysis';
 import type { CompatBreakdown } from '../utils/vibe-analysis';
-import { getContrastTextColor } from '../utils/vibe-colors';
+import { getContrastTextColor, asColorRef } from '../utils/vibe-colors';
 import Footer from '../components/Footer';
 
 interface CompareProps {
@@ -61,11 +61,11 @@ export default function Compare({ currentUser }: CompareProps) {
     if (!a?.average_features || !b?.average_features) return null;
     return calculateCompatBreakdown(
       {
-        averageFeatures: a.average_features as any,
+        metrics: a.average_features as any,
         topGenres: a.top_genres || [],
       },
       {
-        averageFeatures: b.average_features as any,
+        metrics: b.average_features as any,
         topGenres: b.top_genres || [],
       }
     );
@@ -205,8 +205,7 @@ export default function Compare({ currentUser }: CompareProps) {
 
 function CompareCard({ vibe, side }: { vibe: VibeData; side: 'left' | 'right' }) {
   const gradient = vibe.vibe_gradient || 'linear-gradient(135deg, #1a1a2e, #16213e, #0f3460)';
-  const features = vibe.average_features;
-  const text = features?.valence != null ? getContrastTextColor(features as any) : '#ffffff';
+  const text = getContrastTextColor(asColorRef(vibe.average_features));
 
   return (
     <Link
@@ -305,23 +304,21 @@ function pickVerdict(b: CompatBreakdown): string {
 }
 
 function pickHeadlineFeature(b: CompatBreakdown): string | null {
-  // Pick the feature with the smallest delta (most aligned) and surface it
+  // Pick the dimension with the smallest delta (most aligned) and surface it
   // as a "you both ___" line. Skips if nothing is meaningfully close.
   const features: Array<[keyof CompatBreakdown['featureDeltas'], string, string]> = [
-    ['energy', 'energy', 'you both run hot'],
-    ['valence', 'mood', 'you both lean bright'],
-    ['danceability', 'danceability', 'you both get moving'],
-    ['acousticness', 'acoustic feel', 'you both like it organic'],
-    ['instrumentalness', 'instrumentals', 'you both like wordless tracks'],
+    ['mainstream', 'mainstream-ness', 'you both pull from the same chart territory'],
+    ['modernity', 'era', 'you both live in the same musical decade'],
+    ['diversity', 'breadth', 'your genre spreads basically mirror each other'],
+    ['recencyShift', 'discovery rate', 'you both update your taste at the same pace'],
+    ['eraSpread', 'time-range', 'you both stretch across the same eras'],
   ];
 
   const sorted = features
-    .map(([key, _, copy]) => ({ key, copy, delta: b.featureDeltas[key] }))
+    .map(([key, _label, copy]) => ({ key, copy, delta: b.featureDeltas[key] }))
     .sort((a, c) => a.delta - c.delta);
 
-  // Only surface a headline if the closest feature is genuinely close
-  // (delta < 0.12 in 0..1 space).
   const top = sorted[0];
   if (!top || top.delta > 0.12) return null;
-  return `${top.copy} — within ${(top.delta * 100).toFixed(0)} pts on ${top.key}.`;
+  return `${top.copy} — within ${(top.delta * 100).toFixed(0)} pts.`;
 }

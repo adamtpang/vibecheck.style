@@ -4,7 +4,7 @@ import type { User } from '../App';
 import { getUsers, getVibe } from '../utils/api';
 import type { VibeSummary, VibeLabelCount } from '../utils/api';
 import { calculateLightCompatibility } from '../utils/vibe-analysis';
-import { getContrastTextColor, getSubtleTextColor } from '../utils/vibe-colors';
+import { getContrastTextColor, getSubtleTextColor, asColorRef } from '../utils/vibe-colors';
 import Footer from '../components/Footer';
 
 interface ExploreProps {
@@ -73,8 +73,8 @@ export default function Explore({ currentUser }: ExploreProps) {
           score:
             u.average_features
               ? calculateLightCompatibility(
-                  { averageFeatures: me.average_features as any, topGenres: me.top_genres || [] },
-                  { averageFeatures: u.average_features as any, topGenres: u.top_genres || [] }
+                  { metrics: me.average_features as any, topGenres: me.top_genres || [] },
+                  { metrics: u.average_features as any, topGenres: u.top_genres || [] }
                 )
               : null,
         }))
@@ -204,9 +204,9 @@ function SortPill({
 
 function VibeCardTile({ user, score }: { user: VibeSummary; score: number | null }) {
   const gradient = user.vibe_gradient || 'linear-gradient(135deg, #1a1a2e, #16213e, #0f3460)';
-  const features = user.average_features;
-  const text = features?.valence != null ? getContrastTextColor(features as any) : '#ffffff';
-  const subtle = features?.valence != null ? getSubtleTextColor(features as any) : 'rgba(255,255,255,0.6)';
+  const ref = asColorRef(user.average_features);
+  const text = getContrastTextColor(ref);
+  const subtle = getSubtleTextColor(ref);
   const topGenre = user.top_genres?.[0];
 
   return (
