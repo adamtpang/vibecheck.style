@@ -83,15 +83,15 @@ export default function Home({ user }: HomeProps) {
 
   return (
     <div className="ambient-bg min-h-screen bg-black flex items-center justify-center px-6 overflow-hidden">
-      <motion.div
-        className="text-center max-w-md w-full"
-        variants={staggerContainer}
-        initial="initial"
-        animate="animate"
-      >
-        {/* Wordmark — tighter, more refined */}
+      <motion.div className="text-center max-w-md w-full">
+        {/* Wordmark — tighter, more refined.
+            Each element gets its own initial/animate so they don't depend on
+            parent stagger propagation (which has been flaky after the v2.18
+            code-split + lazy fallback). Manual delays mimic the stagger feel. */}
         <motion.h1
-          variants={heroIn}
+          initial={{ opacity: 0, y: 24, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.7, ease: [0.165, 0.84, 0.44, 1] }}
           className="text-5xl sm:text-6xl font-bold text-white tracking-tighter mb-3"
           style={{ letterSpacing: '-0.04em' }}
         >
@@ -102,7 +102,9 @@ export default function Home({ user }: HomeProps) {
         </motion.h1>
 
         <motion.p
-          variants={fadeUp}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, delay: 0.1, ease: [0.165, 0.84, 0.44, 1] }}
           className="text-white/60 text-base sm:text-lg mb-10 font-light"
         >
           a portrait of your taste,{' '}
@@ -110,7 +112,11 @@ export default function Home({ user }: HomeProps) {
         </motion.p>
 
         {/* CTA — smaller pill, less candy, refined glow */}
-        <motion.div variants={fadeUp}>
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, delay: 0.2, ease: [0.165, 0.84, 0.44, 1] }}
+        >
           <motion.button
             onClick={handleLogin}
             disabled={loading}
@@ -135,7 +141,12 @@ export default function Home({ user }: HomeProps) {
           </motion.button>
         </motion.div>
 
-        <motion.div variants={fadeUp} className="mt-5">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, delay: 0.3, ease: [0.165, 0.84, 0.44, 1] }}
+          className="mt-5"
+        >
           <Link
             to="/explore"
             className="text-white/45 hover:text-white text-sm transition-colors"
@@ -145,18 +156,17 @@ export default function Home({ user }: HomeProps) {
         </motion.div>
 
         {/* How it works — refined icon cards, lucide instead of emoji */}
-        <motion.div
-          variants={staggerContainer}
-          className="mt-14 grid grid-cols-3 gap-2.5 text-center"
-        >
+        <motion.div className="mt-14 grid grid-cols-3 gap-2.5 text-center">
           {[
             { Icon: Headphones, label: 'Connect' },
             { Icon: Sparkles, label: 'Analyze' },
             { Icon: Share2, label: 'Share' },
-          ].map(({ Icon, label }) => (
+          ].map(({ Icon, label }, i) => (
             <motion.div
               key={label}
-              variants={fadeUp}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.45 + i * 0.08, ease: [0.165, 0.84, 0.44, 1] }}
               className="glass rounded-xl py-4 px-2 flex flex-col items-center gap-2"
             >
               <Icon className="w-4 h-4 text-white/70" strokeWidth={1.75} />
@@ -166,7 +176,9 @@ export default function Home({ user }: HomeProps) {
         </motion.div>
 
         <motion.p
-          variants={fadeUp}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.55, delay: 0.85 }}
           className="text-white/25 text-[10px] uppercase tracking-[0.25em] mt-12"
         >
           vibecheck.style

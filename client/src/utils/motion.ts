@@ -5,19 +5,13 @@ import type { Variants, Transition } from 'framer-motion';
 export const easeOutQuart: Transition['ease'] = [0.165, 0.84, 0.44, 1];
 
 /** Container that staggers its children's `initial → animate` transitions.
- *  Note: opacity:1 on both states is intentional — without an actual
- *  animatable property on the parent, framer-motion sometimes doesn't
- *  fire the staggerChildren transition reliably (children stick at
- *  opacity 0). The no-op opacity gives it something concrete to "animate"
- *  which kicks the stagger queue. */
+ *  Children must have variants defined for `initial` and `animate` keys. */
 export const staggerContainer: Variants = {
-  initial: { opacity: 1 },
+  initial: {},
   animate: {
-    opacity: 1,
     transition: {
       staggerChildren: 0.06,
       delayChildren: 0.05,
-      when: 'beforeChildren',
     },
   },
 };
