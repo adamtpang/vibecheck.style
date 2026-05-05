@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Headphones, Sparkles, Share2 } from 'lucide-react';
 import type { User } from '../App';
 import { CLIENT_ID } from '../utils/spotify-api';
 import Footer from '../components/Footer';
@@ -83,80 +84,91 @@ export default function Home({ user }: HomeProps) {
   return (
     <div className="ambient-bg min-h-screen bg-black flex items-center justify-center px-6 overflow-hidden">
       <motion.div
-        className="text-center max-w-lg"
+        className="text-center max-w-md w-full"
         variants={staggerContainer}
         initial="initial"
         animate="animate"
       >
-        {/* Logo */}
+        {/* Wordmark — tighter, more refined */}
         <motion.h1
           variants={heroIn}
-          className="text-6xl sm:text-7xl font-bold text-white tracking-tight mb-4"
+          className="text-5xl sm:text-6xl font-bold text-white tracking-tighter mb-3"
+          style={{ letterSpacing: '-0.04em' }}
         >
-          vibe<span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-400 to-teal-400">check</span>
+          vibe
+          <span className="font-serif-accent italic text-white/95" style={{ letterSpacing: '-0.02em' }}>
+            check
+          </span>
         </motion.h1>
 
-        <motion.p variants={fadeUp} className="text-white/55 text-lg mb-12 font-light">
-          what does your music say about you?
+        <motion.p
+          variants={fadeUp}
+          className="text-white/60 text-base sm:text-lg mb-10 font-light"
+        >
+          a portrait of your taste,{' '}
+          <span className="font-serif-accent italic text-white/80">in one card.</span>
         </motion.p>
 
-        {/* CTA */}
+        {/* CTA — smaller pill, less candy, refined glow */}
         <motion.div variants={fadeUp}>
           <motion.button
             onClick={handleLogin}
             disabled={loading}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 18 }}
-            className="group relative bg-[#1DB954] text-black px-10 py-4 rounded-full text-lg font-semibold hover:bg-[#1ed760] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_8px_32px_rgba(29,185,84,0.35)]"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 22 }}
+            className="group relative bg-[#1DB954] text-black px-7 py-3 rounded-full text-base font-semibold hover:bg-[#1ed760] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_6px_24px_rgba(29,185,84,0.25)]"
           >
             {loading ? (
-              <span className="flex items-center gap-3">
-                <span className="animate-spin rounded-full h-5 w-5 border-2 border-black border-t-transparent" />
-                Connecting...
+              <span className="flex items-center gap-2.5">
+                <span className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent" />
+                Connecting…
               </span>
             ) : (
-              <span className="flex items-center gap-3">
-                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+              <span className="flex items-center gap-2.5">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
                 </svg>
-                Connect with Spotify
+                Connect Spotify
               </span>
             )}
           </motion.button>
         </motion.div>
 
-        <motion.div variants={fadeUp} className="mt-6">
+        <motion.div variants={fadeUp} className="mt-5">
           <Link
             to="/explore"
-            className="text-white/50 hover:text-white text-sm font-medium transition-colors"
+            className="text-white/45 hover:text-white text-sm transition-colors"
           >
             or explore other vibes →
           </Link>
         </motion.div>
 
-        {/* How it works — glass cards */}
+        {/* How it works — refined icon cards, lucide instead of emoji */}
         <motion.div
           variants={staggerContainer}
-          className="mt-16 grid grid-cols-3 gap-3 text-center"
+          className="mt-14 grid grid-cols-3 gap-2.5 text-center"
         >
           {[
-            { emoji: '🎵', label: 'connect spotify' },
-            { emoji: '✨', label: 'get your vibe' },
-            { emoji: '🔗', label: 'share with friends' },
-          ].map(step => (
+            { Icon: Headphones, label: 'Connect' },
+            { Icon: Sparkles, label: 'Analyze' },
+            { Icon: Share2, label: 'Share' },
+          ].map(({ Icon, label }) => (
             <motion.div
-              key={step.label}
+              key={label}
               variants={fadeUp}
-              className="glass rounded-2xl py-4 px-2"
+              className="glass rounded-xl py-4 px-2 flex flex-col items-center gap-2"
             >
-              <div className="text-2xl mb-2">{step.emoji}</div>
-              <p className="text-white/60 text-xs">{step.label}</p>
+              <Icon className="w-4 h-4 text-white/70" strokeWidth={1.75} />
+              <p className="text-white/65 text-[11px] uppercase tracking-wider">{label}</p>
             </motion.div>
           ))}
         </motion.div>
 
-        <motion.p variants={fadeUp} className="text-white/20 text-xs mt-12">
+        <motion.p
+          variants={fadeUp}
+          className="text-white/25 text-[10px] uppercase tracking-[0.25em] mt-12"
+        >
           vibecheck.style
         </motion.p>
 

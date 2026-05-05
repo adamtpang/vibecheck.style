@@ -29,18 +29,21 @@ export function getVibeGradient(m: VibeMetrics): VibeGradient {
 
   const primaryHue =
     modernity > 0.5
-      ? lerp(180, 320, (modernity - 0.5) * 2) // teal → magenta
-      : lerp(15, 200, modernity * 2);          // amber → teal
+      ? lerp(195, 305, (modernity - 0.5) * 2) // refined teal → violet
+      : lerp(20, 195, modernity * 2);          // amber → teal
 
-  const saturation = lerp(35, 90, mainstream);
-  const lightness = lerp(22, 48, mainstream * 0.7 + modernity * 0.3);
+  // v2.19: dial saturation back so colors read sophisticated rather than
+  // neon. Cap at 72% (was 90%). Keep the spread for differentiation.
+  const saturation = lerp(28, 72, mainstream);
+  const lightness = lerp(20, 42, mainstream * 0.65 + modernity * 0.35);
 
-  const secondaryHue = (primaryHue + lerp(20, 130, diversity)) % 360;
-  const tertiaryHue = (primaryHue + lerp(180, 220, recencyShift)) % 360;
+  // Tighter secondary spread → more cohesive gradient (less rainbow chaos)
+  const secondaryHue = (primaryHue + lerp(15, 75, diversity)) % 360;
+  const tertiaryHue = (primaryHue + lerp(150, 200, recencyShift)) % 360;
 
   const from = `hsl(${Math.round(primaryHue)}, ${Math.round(saturation)}%, ${Math.round(lightness)}%)`;
-  const via = `hsl(${Math.round(secondaryHue)}, ${Math.round(saturation * 0.85)}%, ${Math.round(lightness * 1.15)}%)`;
-  const to = `hsl(${Math.round(tertiaryHue)}, ${Math.round(saturation * 0.7)}%, ${Math.round(lightness * 0.85)}%)`;
+  const via = `hsl(${Math.round(secondaryHue)}, ${Math.round(saturation * 0.82)}%, ${Math.round(lightness * 1.12)}%)`;
+  const to = `hsl(${Math.round(tertiaryHue)}, ${Math.round(saturation * 0.65)}%, ${Math.round(lightness * 0.82)}%)`;
 
   return {
     from,

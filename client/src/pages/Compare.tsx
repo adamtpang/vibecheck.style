@@ -133,18 +133,22 @@ export default function Compare({ currentUser }: CompareProps) {
           </button>
         </motion.div>
 
-        {/* Headline — animated count-up via spring + glass medallion feel */}
-        <motion.div variants={heroIn} className="text-center mb-8 sm:mb-10">
-          <p className="text-white/50 text-xs uppercase tracking-widest mb-2">
+        {/* Headline — score scales in with shimmer, serif accent on % */}
+        <motion.div variants={heroIn} className="text-center mb-10 sm:mb-12">
+          <p className="text-white/50 text-[10px] uppercase tracking-[0.25em] mb-3">
             vibe match
           </p>
           <motion.div
             initial={{ scale: 0.7, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.8, ease: easeOutQuart, delay: 0.15 }}
-            className="text-7xl sm:text-9xl font-black leading-none mb-2 shimmer-text"
+            className="text-7xl sm:text-[8rem] font-bold leading-none mb-3 shimmer-text tabular-nums tracking-tighter"
+            style={{ letterSpacing: '-0.05em' }}
           >
-            {breakdown.score}%
+            {breakdown.score}
+            <span className="font-serif-accent italic text-white/85" style={{ fontWeight: 400 }}>
+              %
+            </span>
           </motion.div>
           <p className="text-white/75 text-base sm:text-lg max-w-md mx-auto">{verdict}</p>
         </motion.div>

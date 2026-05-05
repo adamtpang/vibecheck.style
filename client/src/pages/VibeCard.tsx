@@ -677,19 +677,25 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
               style={{ borderColor: textColor }}
             />
           )}
-          <h1 className={`text-4xl font-bold mb-1 ${haloClass}`} style={{ color: textColor }}>
+          <h1
+            className={`text-3xl sm:text-4xl font-bold mb-1.5 tracking-tight ${haloClass}`}
+            style={{ color: textColor, letterSpacing: '-0.02em' }}
+          >
             {vibeData.display_name}
           </h1>
-          <p className={`text-sm uppercase tracking-widest ${haloClass}`} style={{ color: subtleColor }}>
+          <p
+            className={`text-[10px] uppercase tracking-[0.25em] ${haloClass}`}
+            style={{ color: subtleColor }}
+          >
             vibecheck.style
           </p>
         </motion.div>
 
-        {/* Vibe Label — the hero */}
-        <motion.div variants={heroIn} className="text-center mb-10">
+        {/* Vibe Label — the hero, tighter typography */}
+        <motion.div variants={heroIn} className="text-center mb-12">
           <div
-            className={`text-5xl sm:text-6xl font-bold leading-tight ${haloClass}`}
-            style={{ color: textColor }}
+            className={`text-4xl sm:text-5xl font-bold leading-[1.05] tracking-tighter ${haloClass}`}
+            style={{ color: textColor, letterSpacing: '-0.04em' }}
           >
             {vibeData.vibe_label}
           </div>
@@ -783,13 +789,16 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
                   style={{ background: `${textColor}30` }}
                 />
                 <span
-                  className={`absolute inset-0 flex items-center justify-center text-lg font-bold ${haloClass}`}
-                  style={{ color: textColor }}
+                  className={`absolute inset-0 flex items-center justify-center text-lg font-semibold tabular-nums ${haloClass}`}
+                  style={{ color: textColor, letterSpacing: '-0.02em' }}
                 >
                   {Math.round(value * 100)}
                 </span>
               </div>
-              <span className={`text-xs uppercase tracking-wide ${haloClass}`} style={{ color: subtleColor }}>
+              <span
+                className={`text-[10px] uppercase tracking-[0.18em] ${haloClass}`}
+                style={{ color: subtleColor }}
+              >
                 {label}
               </span>
             </motion.div>
