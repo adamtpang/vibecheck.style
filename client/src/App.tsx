@@ -1,13 +1,26 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import Home from './pages/Home';
-import VibeCard from './pages/VibeCard';
-import Explore from './pages/Explore';
-import Compare from './pages/Compare';
-import Privacy from './pages/Privacy';
-import Terms from './pages/Terms';
 import { CLIENT_ID } from './utils/spotify-api';
 import './index.css';
+
+// Code-split routes (v2.18) — Home is eager because it's the landing page;
+// everything else lazy-loads on first navigation. Cuts initial bundle from
+// ~350 kB → ~200 kB and defers framer-motion/StoryGenerator/canvas code
+// until the user actually needs them.
+const VibeCard = lazy(() => import('./pages/VibeCard'));
+const Explore = lazy(() => import('./pages/Explore'));
+const Compare = lazy(() => import('./pages/Compare'));
+const Privacy = lazy(() => import('./pages/Privacy'));
+const Terms = lazy(() => import('./pages/Terms'));
+
+function RouteFallback() {
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-2 border-white border-t-transparent" />
+    </div>
+  );
+}
 
 export interface User {
   id: string;
@@ -119,14 +132,16 @@ export default function App() {
 
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<Home user={user} />} />
-        <Route path="/explore" element={<Explore currentUser={user} />} />
-        <Route path="/compare/:idA/:idB" element={<Compare currentUser={user} />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/:userId" element={<VibeCard currentUser={user} setUser={setUser} />} />
-      </Routes>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/" element={<Home user={user} />} />
+          <Route path="/explore" element={<Explore currentUser={user} />} />
+          <Route path="/compare/:idA/:idB" element={<Compare currentUser={user} />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/:userId" element={<VibeCard currentUser={user} setUser={setUser} />} />
+        </Routes>
+      </Suspense>
     </Router>
   );
 }

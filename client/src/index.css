@@ -136,3 +136,25 @@
     animation: none !important;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Contrast halo (v2.18)
+   Apply this to any text whose color is computed from a dynamic gradient
+   (vibe cards, compare cards, tile labels). The double text-shadow paints
+   a soft dark glow on light text and a soft light glow on dark text, which
+   keeps the word legible even when the gradient passes through a tone too
+   close to the text color.
+   -------------------------------------------------------------------------- */
+
+.contrast-halo-light {
+  /* For white/light text: dark halo */
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 0 14px rgba(0, 0, 0, 0.30);
+}
+.contrast-halo-dark {
+  /* For black/dark text: light halo */
+  text-shadow:
+    0 1px 2px rgba(255, 255, 255, 0.45),
+    0 0 14px rgba(255, 255, 255, 0.30);
+}

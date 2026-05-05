@@ -233,6 +233,7 @@ export default function Compare({ currentUser }: CompareProps) {
 function CompareCard({ vibe, side }: { vibe: VibeData; side: 'left' | 'right' }) {
   const gradient = vibe.vibe_gradient || 'linear-gradient(135deg, #1a1a2e, #16213e, #0f3460)';
   const text = getContrastTextColor(asColorRef(vibe.average_features));
+  const halo = text === '#000000' ? 'contrast-halo-dark' : 'contrast-halo-light';
 
   return (
     <Link
@@ -259,7 +260,7 @@ function CompareCard({ vibe, side }: { vibe: VibeData; side: 'left' | 'right' })
             </div>
           )}
           <p
-            className="text-sm sm:text-base font-semibold truncate"
+            className={`text-sm sm:text-base font-semibold truncate ${halo}`}
             style={{ color: text }}
           >
             {vibe.display_name}
@@ -269,7 +270,7 @@ function CompareCard({ vibe, side }: { vibe: VibeData; side: 'left' | 'right' })
         {/* Middle: vibe label */}
         <div className="flex-1 flex items-center justify-center text-center">
           <p
-            className="text-2xl sm:text-4xl font-bold leading-tight"
+            className={`text-2xl sm:text-4xl font-bold leading-tight ${halo}`}
             style={{ color: text }}
           >
             {vibe.vibe_label}
@@ -279,7 +280,7 @@ function CompareCard({ vibe, side }: { vibe: VibeData; side: 'left' | 'right' })
         {/* Bottom: top genre */}
         {vibe.top_genres?.[0] && (
           <p
-            className="text-[10px] sm:text-xs uppercase tracking-widest text-center truncate"
+            className={`text-[10px] sm:text-xs uppercase tracking-widest text-center truncate ${halo}`}
             style={{ color: `${text}90` }}
           >
             {vibe.top_genres[0]}

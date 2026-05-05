@@ -67,6 +67,8 @@ export default function Home({ user }: HomeProps) {
           'user-read-currently-playing',
           'user-read-playback-state',
           'user-library-read',
+          // Added in v2.18 — needed to upload a custom playlist cover image.
+          'ugc-image-upload',
         ].join(' '),
         code_challenge_method: 'S256',
         code_challenge: codeChallenge,

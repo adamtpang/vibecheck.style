@@ -229,6 +229,7 @@ function VibeCardTile({ user, score }: { user: VibeSummary; score: number | null
   const text = getContrastTextColor(ref);
   const subtle = getSubtleTextColor(ref);
   const topGenre = user.top_genres?.[0];
+  const halo = text === '#000000' ? 'contrast-halo-dark' : 'contrast-halo-light';
 
   return (
     <motion.div variants={fadeUp} className="rounded-2xl">
@@ -269,7 +270,7 @@ function VibeCardTile({ user, score }: { user: VibeSummary; score: number | null
                 </div>
               )}
               <p
-                className="text-base font-semibold truncate"
+                className={`text-base font-semibold truncate ${halo}`}
                 style={{ color: text }}
               >
                 {user.display_name}
@@ -279,14 +280,14 @@ function VibeCardTile({ user, score }: { user: VibeSummary; score: number | null
             {/* Bottom: vibe label + top genre */}
             <div>
               <p
-                className="text-2xl font-bold leading-tight mb-1"
+                className={`text-2xl font-bold leading-tight mb-1 ${halo}`}
                 style={{ color: text }}
               >
                 {user.vibe_label}
               </p>
               {topGenre && (
                 <p
-                  className="text-xs uppercase tracking-wider truncate"
+                  className={`text-xs uppercase tracking-wider truncate ${halo}`}
                   style={{ color: subtle }}
                 >
                   {topGenre}

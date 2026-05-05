@@ -2,7 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { User } from '../App';
-import { spotifyApiGet, spotifyApiPost, SpotifyApiError } from '../utils/spotify-api';
+import {
+  spotifyApiGet,
+  spotifyApiPost,
+  spotifyApiPut,
+  spotifyApiPutImage,
+  SpotifyApiError,
+} from '../utils/spotify-api';
 import { createVibeProfile, calculateLightCompatibility } from '../utils/vibe-analysis';
 import { getVibeLabel } from '../utils/vibe-labels';
 import { getVibeGradient, getContrastTextColor, getSubtleTextColor } from '../utils/vibe-colors';
@@ -11,6 +17,7 @@ import type { VibeData, VibeSummary } from '../utils/api';
 import StoryGenerator from '../components/StoryGenerator';
 import Footer from '../components/Footer';
 import { fadeUp, heroIn, staggerContainer, cardSpring } from '../utils/motion';
+import { generatePlaylistCover } from '../utils/playlist-cover';
 
 interface VibeCardProps {
   currentUser: User | null;
@@ -318,25 +325,96 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
       const vibeLabel = getVibeLabel(profile.metrics);
       const gradient = getVibeGradient(profile.metrics);
 
-      // Create Spotify playlist
-      let playlistId = currentUser.playlistId;
+      // --- Spotify playlist: find existing OR create, then replace tracks ---
+      // Avoids the bug where every refresh spawned a new "vibecheck.style"
+      // playlist on the user's account.
+      let playlistId = currentUser.playlistId || null;
       setPlaylistError(false);
       try {
-        const playlist = await spotifyApiPost(
-          `https://api.spotify.com/v1/users/${currentUser.id}/playlists`,
-          {
-            name: 'vibecheck.style',
-            description: `${currentUser.display_name}'s music vibe — ${vibeLabel.emoji} ${vibeLabel.label}`,
-            public: false,
-          }
-        );
-        playlistId = playlist.id;
+        const playlistName = 'vibecheck.style';
+        const playlistDescription = `${currentUser.display_name}'s music vibe — ${vibeLabel.emoji} ${vibeLabel.label}`;
 
-        // Add top tracks (max 100)
+        // 1. Validate the cached playlist still exists. Users sometimes
+        //    delete it manually; if so we fall through to search/create.
+        if (playlistId) {
+          try {
+            await spotifyApiGet(`https://api.spotify.com/v1/playlists/${playlistId}?fields=id`);
+          } catch {
+            playlistId = null;
+          }
+        }
+
+        // 2. If no cached id, scan the first 50 of the user's own playlists
+        //    for one we previously made.
+        if (!playlistId) {
+          const list = await spotifyApiGet(
+            'https://api.spotify.com/v1/me/playlists?limit=50'
+          );
+          const existing = (list.items || []).find(
+            (p: any) =>
+              p.name === playlistName &&
+              p.owner?.id === currentUser.id
+          );
+          if (existing) {
+            playlistId = existing.id;
+            console.log('🔁 Reusing existing playlist', playlistId);
+          }
+        }
+
+        // 3. Create only if neither cached nor found.
+        if (!playlistId) {
+          const playlist = await spotifyApiPost(
+            `https://api.spotify.com/v1/users/${currentUser.id}/playlists`,
+            { name: playlistName, description: playlistDescription, public: false }
+          );
+          playlistId = playlist.id;
+          console.log('✨ Created new playlist', playlistId);
+        }
+
+        // 4. Replace tracks (PUT, not POST — POST appends, PUT replaces).
+        //    Spotify caps PUT at 100 URIs per request.
         const uris = sortedTracks.slice(0, 100).map((t: any) => t.uri);
-        await spotifyApiPost(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, { uris });
+        await spotifyApiPut(
+          `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+          { uris }
+        );
+
+        // 5. Refresh description (label may have changed since last gen)
+        try {
+          await spotifyApiPut(
+            `https://api.spotify.com/v1/playlists/${playlistId}`,
+            { name: playlistName, description: playlistDescription }
+          );
+        } catch (descErr) {
+          console.warn('Playlist description update failed (non-fatal):', descErr);
+        }
+
+        // 6. Generate + upload a custom playlist cover. Failure here is
+        //    non-fatal — the playlist still works without a cover.
+        try {
+          const cover = await generatePlaylistCover({
+            gradient: gradient.css,
+            vibeLabel: `${vibeLabel.emoji} ${vibeLabel.label}`,
+            textColor:
+              getContrastTextColor(profile.metrics) === '#000000' ? '#000000' : '#ffffff',
+          });
+          await spotifyApiPutImage(
+            `https://api.spotify.com/v1/playlists/${playlistId}/images`,
+            cover
+          );
+          console.log('🎨 Playlist cover uploaded');
+        } catch (coverErr) {
+          if (coverErr instanceof SpotifyApiError && coverErr.status === 403) {
+            console.warn(
+              'Cover upload 403 — token likely missing ugc-image-upload scope. Reconnect Spotify.'
+            );
+            setNeedsReconnect(true);
+          } else {
+            console.warn('Cover upload failed (non-fatal):', coverErr);
+          }
+        }
       } catch (err) {
-        console.error('Playlist creation failed:', err);
+        console.error('Playlist sync failed:', err);
         setPlaylistError(true);
       }
 
@@ -533,6 +611,11 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
         { label: 'Acoustic', value: features.acousticness ?? 0 },
       ];
 
+  // Halo class for text rendered directly over the vibe gradient — keeps it
+  // legible regardless of where the gradient passes through tones close to
+  // the chosen text color.
+  const haloClass = textColor === '#000000' ? 'contrast-halo-dark' : 'contrast-halo-light';
+
   return (
     <div className="min-h-screen" style={{ background: gradient }}>
       <motion.div
@@ -594,10 +677,10 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
               style={{ borderColor: textColor }}
             />
           )}
-          <h1 className="text-4xl font-bold mb-1" style={{ color: textColor }}>
+          <h1 className={`text-4xl font-bold mb-1 ${haloClass}`} style={{ color: textColor }}>
             {vibeData.display_name}
           </h1>
-          <p className="text-sm uppercase tracking-widest" style={{ color: subtleColor }}>
+          <p className={`text-sm uppercase tracking-widest ${haloClass}`} style={{ color: subtleColor }}>
             vibecheck.style
           </p>
         </motion.div>
@@ -605,8 +688,8 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
         {/* Vibe Label — the hero */}
         <motion.div variants={heroIn} className="text-center mb-10">
           <div
-            className="text-5xl sm:text-6xl font-bold leading-tight"
-            style={{ color: textColor, textShadow: '0 2px 30px rgba(0,0,0,0.25)' }}
+            className={`text-5xl sm:text-6xl font-bold leading-tight ${haloClass}`}
+            style={{ color: textColor }}
           >
             {vibeData.vibe_label}
           </div>
@@ -700,13 +783,13 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
                   style={{ background: `${textColor}30` }}
                 />
                 <span
-                  className="absolute inset-0 flex items-center justify-center text-lg font-bold"
+                  className={`absolute inset-0 flex items-center justify-center text-lg font-bold ${haloClass}`}
                   style={{ color: textColor }}
                 >
                   {Math.round(value * 100)}
                 </span>
               </div>
-              <span className="text-xs uppercase tracking-wide" style={{ color: subtleColor }}>
+              <span className={`text-xs uppercase tracking-wide ${haloClass}`} style={{ color: subtleColor }}>
                 {label}
               </span>
             </motion.div>

@@ -186,3 +186,41 @@ export async function spotifyApiPost(url: string, body: any): Promise<any> {
     });
     return parseOrThrow(response, url);
 }
+
+/**
+ * PUT with JSON body. Used by /v1/playlists/{id}/tracks to REPLACE the
+ * track list (POST appends, PUT replaces — exactly what we want when
+ * regenerating the vibecheck playlist).
+ */
+export async function spotifyApiPut(url: string, body: any): Promise<any> {
+    const response = await spotifyApiRequest(url, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+    });
+    // Some PUT endpoints return 200 with an empty body or 201 — treat both
+    // as success without trying to parse JSON.
+    if (response.status === 200 || response.status === 201) return {};
+    return parseOrThrow(response, url);
+}
+
+/**
+ * PUT a base64-encoded JPEG to /v1/playlists/{id}/images. Spotify's only
+ * binary upload — content-type is `image/jpeg` and the body is the raw
+ * base64 string (no `data:` prefix). Requires the ugc-image-upload scope.
+ */
+export async function spotifyApiPutImage(url: string, jpegBase64: string): Promise<void> {
+    const response = await spotifyApiRequest(url, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'image/jpeg',
+        },
+        body: jpegBase64,
+    });
+    if (!response.ok) {
+        const errBody = await response.text().catch(() => '');
+        throw new SpotifyApiError(response.status, new URL(url).pathname, errBody || response.statusText);
+    }
+}
