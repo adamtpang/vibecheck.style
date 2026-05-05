@@ -54,6 +54,18 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
     playedAt: string;
   }>>([]);
   const [needsReconnect, setNeedsReconnect] = useState(false);
+  const [libraryStats, setLibraryStats] = useState<{ tracks: number; albums: number } | null>(null);
+
+  // Time-range switcher state — owner-only. The active tab triggers a
+  // fresh fetch of top tracks + artists for that range, cached per range.
+  type TimeRange = 'short_term' | 'medium_term' | 'long_term';
+  const [timeRange, setTimeRange] = useState<TimeRange | null>(null);
+  const [rangeData, setRangeData] = useState<Record<TimeRange, { tracks: any[]; artists: any[] } | undefined>>({
+    short_term: undefined,
+    medium_term: undefined,
+    long_term: undefined,
+  });
+  const [rangeLoading, setRangeLoading] = useState(false);
 
   const isOwner = currentUser?.id === userId;
   // Treat undefined is_public as public — pre-migration rows lack the field.
@@ -154,9 +166,29 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
       }
     }
 
+    async function fetchLibraryStats() {
+      try {
+        const [tracks, albums] = await Promise.all([
+          spotifyApiGet('https://api.spotify.com/v1/me/tracks?limit=1'),
+          spotifyApiGet('https://api.spotify.com/v1/me/albums?limit=1'),
+        ]);
+        if (cancelled) return;
+        setLibraryStats({
+          tracks: tracks?.total ?? 0,
+          albums: albums?.total ?? 0,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof SpotifyApiError && (err.status === 401 || err.status === 403)) {
+          setNeedsReconnect(true);
+        }
+      }
+    }
+
     fetchNowPlaying();
     fetchRecentlyPlayed();
-    // Poll now-playing every 30s; recently-played is fine to fetch once.
+    fetchLibraryStats();
+    // Poll now-playing every 30s; recently-played + library are fetched once.
     interval = setInterval(fetchNowPlaying, 30000);
 
     return () => {
@@ -164,6 +196,39 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
       if (interval) clearInterval(interval);
     };
   }, [isOwner, userId]);
+
+  // Time-range tab handler — fetches the selected range on first activation
+  // and caches it. Subsequent toggles between tabs are instant.
+  async function handleTimeRange(range: TimeRange) {
+    setTimeRange(range);
+    if (rangeData[range]) return; // already cached
+    setRangeLoading(true);
+    try {
+      const [tracksRes, artistsRes] = await Promise.all([
+        spotifyApiGet(`https://api.spotify.com/v1/me/top/tracks?time_range=${range}&limit=20`),
+        spotifyApiGet(`https://api.spotify.com/v1/me/top/artists?time_range=${range}&limit=12`),
+      ]);
+      const tracks = (tracksRes.items || []).map((t: any) => ({
+        name: t.name,
+        artist: (t.artists || []).map((a: any) => a.name).join(', '),
+        albumArt: t.album?.images?.[1]?.url || t.album?.images?.[0]?.url || '',
+        uri: t.uri,
+        url: t.external_urls?.spotify,
+      }));
+      const artists = (artistsRes.items || []).map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        image: a.images?.find((img: any) => img.width <= 320)?.url || a.images?.[0]?.url || null,
+        genres: a.genres || [],
+        url: a.external_urls?.spotify || `https://open.spotify.com/artist/${a.id}`,
+      }));
+      setRangeData(prev => ({ ...prev, [range]: { tracks, artists } }));
+    } catch (err) {
+      console.error('Time-range fetch failed:', err);
+    } finally {
+      setRangeLoading(false);
+    }
+  }
 
   // Vibe twins: top 3 most-compatible public users for the owner's view.
   // Skipped for visitors — the compat panel above already serves that role.
@@ -590,9 +655,12 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
     : { mainstream: features.valence ?? 0.5, modernity: features.energy ?? 0.5 };
   const textColor = getContrastTextColor(colorRef as any);
   const subtleColor = getSubtleTextColor(colorRef as any);
-  const topTracks = vibeData.top_tracks || [];
+  // When a time-range tab is active (owner only), swap in that range's
+  // freshly-fetched data; otherwise show the aggregated saved data.
+  const activeRange = isOwner && timeRange ? rangeData[timeRange] : null;
+  const topTracks = activeRange?.tracks ?? vibeData.top_tracks ?? [];
   const topGenres = vibeData.top_genres || [];
-  const topArtists = vibeData.top_artists || [];
+  const topArtists = activeRange?.artists ?? vibeData.top_artists ?? [];
 
   // Meters reflect the v2.16 vibe model (mainstream / modernity / diversity / activity).
   // Legacy rows (pre-v2.16) fall back to whatever audio-feature numbers they have
@@ -804,6 +872,81 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
             </motion.div>
           ))}
         </motion.div>
+
+        {/* Library stats — owner only, two compact stat cards */}
+        {isOwner && libraryStats && (libraryStats.tracks > 0 || libraryStats.albums > 0) && (
+          <motion.div variants={fadeUp} className="grid grid-cols-2 gap-3 mb-10">
+            {[
+              { label: 'Saved Songs', value: libraryStats.tracks },
+              { label: 'Saved Albums', value: libraryStats.albums },
+            ].map(stat => (
+              <div
+                key={stat.label}
+                className="rounded-xl p-4 text-center"
+                style={{
+                  background: `${textColor}08`,
+                  border: `1px solid ${textColor}15`,
+                  backdropFilter: 'blur(14px)',
+                  WebkitBackdropFilter: 'blur(14px)',
+                }}
+              >
+                <div
+                  className={`text-3xl font-semibold tabular-nums ${haloClass}`}
+                  style={{ color: textColor, letterSpacing: '-0.02em' }}
+                >
+                  {stat.value.toLocaleString()}
+                </div>
+                <div
+                  className={`text-[10px] uppercase tracking-[0.18em] mt-1 ${haloClass}`}
+                  style={{ color: subtleColor }}
+                >
+                  {stat.label}
+                </div>
+              </div>
+            ))}
+          </motion.div>
+        )}
+
+        {/* Time-range tabs (owner only) — toggle which range's top tracks
+            and artists render below. Defaults off (shows aggregated). */}
+        {isOwner && (
+          <motion.div
+            variants={fadeUp}
+            className="flex items-center gap-1.5 mb-6 justify-center flex-wrap"
+          >
+            <span
+              className="text-[10px] uppercase tracking-[0.2em] mr-2"
+              style={{ color: subtleColor }}
+            >
+              View
+            </span>
+            {(
+              [
+                { key: null, label: 'My Vibe' },
+                { key: 'short_term' as TimeRange, label: '4 Weeks' },
+                { key: 'medium_term' as TimeRange, label: '6 Months' },
+                { key: 'long_term' as TimeRange, label: 'All Time' },
+              ]
+            ).map(opt => {
+              const active = timeRange === opt.key;
+              return (
+                <button
+                  key={opt.label}
+                  onClick={() => (opt.key ? handleTimeRange(opt.key) : setTimeRange(null))}
+                  disabled={rangeLoading}
+                  className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all disabled:opacity-50 ${haloClass}`}
+                  style={{
+                    background: active ? textColor : `${textColor}12`,
+                    color: active ? (gradient.includes('hsl') ? '#000' : '#fff') : textColor,
+                    border: `1px solid ${textColor}25`,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </motion.div>
+        )}
 
         {/* Top 5 Tracks */}
         {topTracks.length > 0 && (
