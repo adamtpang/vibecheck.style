@@ -16,7 +16,7 @@ const Terms = lazy(() => import('./pages/Terms'));
 
 function RouteFallback() {
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
+    <div className="min-h-screen bg-[#0a0908] flex items-center justify-center">
       <div className="animate-spin rounded-full h-8 w-8 border-2 border-white border-t-transparent" />
     </div>
   );
@@ -31,9 +31,17 @@ export interface User {
 
 const REDIRECT_URI = window.location.origin;
 
+// Spotify is invite-only until the app is granted extended quota; a
+// non-allowlisted user gets a token but 403s on /v1/me. This message explains
+// that instead of silently bouncing them to the landing page.
+const DEV_MODE_MESSAGE =
+  "vibecheck is invite-only right now — Spotify hasn't approved general access yet. " +
+  'Ask Adam to add your Spotify email to the allowlist, then try again.';
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     // Check for existing user data
@@ -50,6 +58,14 @@ export default function App() {
     const error = urlParams.get('error');
 
     if (error) {
+      // User declined consent, or Spotify rejected the request.
+      setAuthError(
+        error === 'access_denied'
+          ? 'You cancelled the Spotify connection. Tap Connect to try again.'
+          : `Spotify sign-in failed (${error}). Please try again.`
+      );
+      // Strip the ?error= so a refresh doesn't re-show it.
+      window.history.replaceState({}, document.title, '/');
       setLoading(false);
       return;
     }
@@ -64,7 +80,10 @@ export default function App() {
   const handleOAuthCallback = async (code: string) => {
     try {
       const codeVerifier = localStorage.getItem('code_verifier');
-      if (!codeVerifier) throw new Error('Code verifier not found');
+      if (!codeVerifier)
+        throw new Error(
+          'Your sign-in link expired or was opened in a different browser. Tap Connect to start over.'
+        );
 
       const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
@@ -80,7 +99,7 @@ export default function App() {
 
       const data = await response.json();
       if (data.error) throw new Error(data.error_description || data.error);
-      if (!data.access_token) throw new Error('No access token received');
+      if (!data.access_token) throw new Error('Spotify did not return an access token. Please try again.');
 
       localStorage.setItem('access_token', data.access_token);
       if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token);
@@ -95,8 +114,14 @@ export default function App() {
       const userRes = await fetch('https://api.spotify.com/v1/me', {
         headers: { Authorization: `Bearer ${data.access_token}` },
       });
+      // 403 here = the account isn't on the app's Spotify allowlist (dev mode).
+      if (userRes.status === 403) {
+        const devErr = new Error(DEV_MODE_MESSAGE);
+        (devErr as any).devMode = true;
+        throw devErr;
+      }
       const profile = await userRes.json();
-      if (profile.error) throw new Error(profile.error.message);
+      if (profile.error) throw new Error(profile.error.message || 'Could not read your Spotify profile.');
 
       const user: User = {
         id: profile.id,
@@ -116,6 +141,7 @@ export default function App() {
       localStorage.removeItem('token_expires_at');
       localStorage.removeItem('user_data');
       localStorage.removeItem('code_verifier');
+      setAuthError(err instanceof Error ? err.message : 'Something went wrong signing in. Please try again.');
       window.history.replaceState({}, document.title, '/');
     } finally {
       setLoading(false);
@@ -124,7 +150,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0908] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-white border-t-transparent" />
       </div>
     );
@@ -134,7 +160,7 @@ export default function App() {
     <Router>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
-          <Route path="/" element={<Home user={user} />} />
+          <Route path="/" element={<Home user={user} authError={authError} />} />
           <Route path="/explore" element={<Explore currentUser={user} />} />
           <Route path="/compare/:idA/:idB" element={<Compare currentUser={user} />} />
           <Route path="/privacy" element={<Privacy />} />

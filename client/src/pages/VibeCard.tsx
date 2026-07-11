@@ -35,6 +35,16 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [playlistError, setPlaylistError] = useState(false);
+  const [playlistCreating, setPlaylistCreating] = useState(false);
+  // Track URIs + cover params stashed by the latest generateVibe, so the
+  // opt-in "Save as Spotify playlist" button can build the playlist without
+  // recomputing. Null until a generation runs; the handler re-fetches if so.
+  const [playlistSource, setPlaylistSource] = useState<{
+    uris: string[];
+    gradient: string;
+    label: string;
+    textColor: '#ffffff' | '#000000';
+  } | null>(null);
   const [savingPrivacy, setSavingPrivacy] = useState(false);
   const [twins, setTwins] = useState<Array<{ user: VibeSummary; score: number }>>([]);
   const [deleting, setDeleting] = useState(false);
@@ -390,98 +400,16 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
       const vibeLabel = getVibeLabel(profile.metrics);
       const gradient = getVibeGradient(profile.metrics);
 
-      // --- Spotify playlist: find existing OR create, then replace tracks ---
-      // Avoids the bug where every refresh spawned a new "vibecheck.style"
-      // playlist on the user's account.
-      let playlistId = currentUser.playlistId || null;
-      setPlaylistError(false);
-      try {
-        const playlistName = 'vibecheck.style';
-        const playlistDescription = `${currentUser.display_name}'s music vibe — ${vibeLabel.emoji} ${vibeLabel.label}`;
-
-        // 1. Validate the cached playlist still exists. Users sometimes
-        //    delete it manually; if so we fall through to search/create.
-        if (playlistId) {
-          try {
-            await spotifyApiGet(`https://api.spotify.com/v1/playlists/${playlistId}?fields=id`);
-          } catch {
-            playlistId = null;
-          }
-        }
-
-        // 2. If no cached id, scan the first 50 of the user's own playlists
-        //    for one we previously made.
-        if (!playlistId) {
-          const list = await spotifyApiGet(
-            'https://api.spotify.com/v1/me/playlists?limit=50'
-          );
-          const existing = (list.items || []).find(
-            (p: any) =>
-              p.name === playlistName &&
-              p.owner?.id === currentUser.id
-          );
-          if (existing) {
-            playlistId = existing.id;
-            console.log('🔁 Reusing existing playlist', playlistId);
-          }
-        }
-
-        // 3. Create only if neither cached nor found.
-        if (!playlistId) {
-          const playlist = await spotifyApiPost(
-            `https://api.spotify.com/v1/users/${currentUser.id}/playlists`,
-            { name: playlistName, description: playlistDescription, public: false }
-          );
-          playlistId = playlist.id;
-          console.log('✨ Created new playlist', playlistId);
-        }
-
-        // 4. Replace tracks (PUT, not POST — POST appends, PUT replaces).
-        //    Spotify caps PUT at 100 URIs per request.
-        const uris = sortedTracks.slice(0, 100).map((t: any) => t.uri);
-        await spotifyApiPut(
-          `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
-          { uris }
-        );
-
-        // 5. Refresh description (label may have changed since last gen)
-        try {
-          await spotifyApiPut(
-            `https://api.spotify.com/v1/playlists/${playlistId}`,
-            { name: playlistName, description: playlistDescription }
-          );
-        } catch (descErr) {
-          console.warn('Playlist description update failed (non-fatal):', descErr);
-        }
-
-        // 6. Generate + upload a custom playlist cover. Failure here is
-        //    non-fatal — the playlist still works without a cover.
-        try {
-          const cover = await generatePlaylistCover({
-            gradient: gradient.css,
-            vibeLabel: `${vibeLabel.emoji} ${vibeLabel.label}`,
-            textColor:
-              getContrastTextColor(profile.metrics) === '#000000' ? '#000000' : '#ffffff',
-          });
-          await spotifyApiPutImage(
-            `https://api.spotify.com/v1/playlists/${playlistId}/images`,
-            cover
-          );
-          console.log('🎨 Playlist cover uploaded');
-        } catch (coverErr) {
-          if (coverErr instanceof SpotifyApiError && coverErr.status === 403) {
-            console.warn(
-              'Cover upload 403 — token likely missing ugc-image-upload scope. Reconnect Spotify.'
-            );
-            setNeedsReconnect(true);
-          } else {
-            console.warn('Cover upload failed (non-fatal):', coverErr);
-          }
-        }
-      } catch (err) {
-        console.error('Playlist sync failed:', err);
-        setPlaylistError(true);
-      }
+      // Playlist creation is now opt-in (the "Save as Spotify playlist" button)
+      // rather than an automatic write to the user's account on every generate.
+      // Stash what that action needs; keep any playlist we already made.
+      const playlistId = currentUser.playlistId || null;
+      setPlaylistSource({
+        uris: sortedTracks.slice(0, 100).map((t: any) => t.uri).filter(Boolean),
+        gradient: gradient.css,
+        label: `${vibeLabel.emoji} ${vibeLabel.label}`,
+        textColor: getContrastTextColor(profile.metrics) === '#000000' ? '#000000' : '#ffffff',
+      });
 
       // Top 5 tracks for display (with album art)
       const top5 = sortedTracks.slice(0, 5).map((t: any) => ({
@@ -535,6 +463,113 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
     } finally {
       setGenerating(false);
       setLoading(false);
+    }
+  }
+
+  // Opt-in: build (or refresh) the "vibecheck.style" playlist on the user's
+  // own Spotify account. Only runs when they click the button — generating a
+  // vibe no longer writes to their account automatically.
+  async function createSpotifyPlaylist() {
+    if (!currentUser || !vibeData || playlistCreating) return;
+    setPlaylistCreating(true);
+    setPlaylistError(false);
+    try {
+      // Prefer URIs from the latest generation; otherwise pull the user's
+      // top tracks now so a page loaded straight from a saved vibe still works.
+      let source = playlistSource;
+      if (!source || source.uris.length === 0) {
+        const top = await spotifyApiGet(
+          'https://api.spotify.com/v1/me/top/tracks?time_range=medium_term&limit=50'
+        );
+        source = {
+          uris: (top.items || []).map((t: any) => t.uri).filter(Boolean),
+          gradient: vibeData.vibe_gradient || '',
+          label: vibeData.vibe_label || 'vibecheck.style',
+          textColor: '#ffffff' as const,
+        };
+      }
+      if (source.uris.length === 0) {
+        setPlaylistError(true);
+        return;
+      }
+
+      const playlistName = 'vibecheck.style';
+      const playlistDescription = `${currentUser.display_name}'s music vibe — ${source.label}`;
+      let playlistId = currentUser.playlistId || null;
+
+      // Validate a cached playlist still exists (users delete them manually).
+      if (playlistId) {
+        try {
+          await spotifyApiGet(`https://api.spotify.com/v1/playlists/${playlistId}?fields=id`);
+        } catch {
+          playlistId = null;
+        }
+      }
+      // Reuse one we previously made before creating a duplicate.
+      if (!playlistId) {
+        const list = await spotifyApiGet('https://api.spotify.com/v1/me/playlists?limit=50');
+        const existing = (list.items || []).find(
+          (p: any) => p.name === playlistName && p.owner?.id === currentUser.id
+        );
+        if (existing) playlistId = existing.id;
+      }
+      if (!playlistId) {
+        const playlist = await spotifyApiPost(
+          `https://api.spotify.com/v1/users/${currentUser.id}/playlists`,
+          { name: playlistName, description: playlistDescription, public: false }
+        );
+        playlistId = playlist.id;
+      }
+
+      // Replace tracks (PUT replaces; Spotify caps at 100 URIs).
+      await spotifyApiPut(
+        `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+        { uris: source.uris }
+      );
+      try {
+        await spotifyApiPut(
+          `https://api.spotify.com/v1/playlists/${playlistId}`,
+          { name: playlistName, description: playlistDescription }
+        );
+      } catch (descErr) {
+        console.warn('Playlist description update failed (non-fatal):', descErr);
+      }
+
+      // Custom cover — non-fatal on failure.
+      try {
+        const cover = await generatePlaylistCover({
+          gradient: source.gradient,
+          vibeLabel: source.label,
+          textColor: source.textColor,
+        });
+        await spotifyApiPutImage(
+          `https://api.spotify.com/v1/playlists/${playlistId}/images`,
+          cover
+        );
+      } catch (coverErr) {
+        if (coverErr instanceof SpotifyApiError && coverErr.status === 403) {
+          setNeedsReconnect(true);
+        } else {
+          console.warn('Cover upload failed (non-fatal):', coverErr);
+        }
+      }
+
+      // Persist the playlist id on the vibe + user session.
+      const updated = { ...vibeData, playlist_id: playlistId };
+      setVibeData(updated);
+      const updatedUser = { ...currentUser, playlistId: playlistId || undefined };
+      setUser(updatedUser);
+      localStorage.setItem('user_data', JSON.stringify(updatedUser));
+      try {
+        await saveVibe(updated);
+      } catch (saveErr) {
+        console.warn('Saving playlist id failed (non-fatal):', saveErr);
+      }
+    } catch (err) {
+      console.error('Playlist creation failed:', err);
+      setPlaylistError(true);
+    } finally {
+      setPlaylistCreating(false);
     }
   }
 
@@ -611,12 +646,26 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
   // --- Error State ---
   if (error && !vibeData) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center px-6">
+      <div className="ambient-bg min-h-screen bg-[#0a0908] flex items-center justify-center px-6">
         <div className="text-center max-w-md">
-          <p className="text-white/60 text-lg mb-6">{error}</p>
-          <a href="/" className="text-[#1DB954] hover:underline font-medium">
-            Create your vibe
-          </a>
+          <p className="text-white/70 text-lg mb-6">{error}</p>
+          <div className="flex items-center justify-center gap-3">
+            {isOwner && (
+              <button
+                onClick={() => loadVibe()}
+                disabled={loading || generating}
+                className="rounded-full bg-white/10 hover:bg-white/15 px-5 py-2.5 text-sm font-medium text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:opacity-50"
+              >
+                {loading || generating ? 'Trying…' : 'Try again'}
+              </button>
+            )}
+            <a
+              href="/"
+              className="rounded-full bg-[#1DB954] hover:bg-[#1ed760] px-5 py-2.5 text-sm font-semibold text-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1DB954] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0908]"
+            >
+              {isOwner ? 'Back home' : 'Create your vibe'}
+            </a>
+          </div>
         </div>
       </div>
     );
@@ -1131,18 +1180,56 @@ export default function VibeCard({ currentUser, setUser }: VibeCardProps) {
           </div>
         )}
 
-        {/* Playlist failure notice (owner only) */}
-        {isOwner && playlistError && !vibeData.playlist_id && (
+        {/* Spotify playlist — opt-in (owner only). We don't touch the user's
+            account until they ask; this makes it their explicit choice. */}
+        {isOwner && (
+          <div
+            className="mb-10 px-4 py-4 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+            style={{ background: `${textColor}10`, border: `1px solid ${textColor}22` }}
+          >
+            <div className="text-sm" style={{ color: textColor }}>
+              <p className="font-medium">
+                {vibeData.playlist_id ? 'Your vibe playlist is on Spotify' : 'Save this vibe as a Spotify playlist'}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: subtleColor }}>
+                {vibeData.playlist_id
+                  ? 'Refresh it anytime to match your latest vibe.'
+                  : 'Optional — creates a private “vibecheck.style” playlist on your account.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {vibeData.playlist_id && (
+                <a
+                  href={`https://open.spotify.com/playlist/${vibeData.playlist_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2"
+                  style={{ background: `${textColor}14`, color: textColor }}
+                >
+                  Open
+                </a>
+              )}
+              <button
+                onClick={createSpotifyPlaylist}
+                disabled={playlistCreating}
+                className="rounded-full bg-[#1DB954] hover:bg-[#1ed760] px-4 py-2 text-sm font-semibold text-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1DB954] focus-visible:ring-offset-2"
+                style={{ ['--tw-ring-offset-color' as any]: '#0a0908' }}
+              >
+                {playlistCreating
+                  ? 'Saving…'
+                  : vibeData.playlist_id
+                    ? 'Refresh playlist'
+                    : 'Save to Spotify'}
+              </button>
+            </div>
+          </div>
+        )}
+        {isOwner && playlistError && (
           <div
             className="mb-10 px-4 py-3 rounded-xl text-sm"
-            style={{
-              background: `${textColor}10`,
-              border: `1px solid ${textColor}30`,
-              color: textColor,
-            }}
+            style={{ background: '#dc262618', border: '1px solid #dc262640', color: '#fca5a5' }}
           >
-            We couldn't create your Spotify playlist this time — your vibe is
-            saved though. Hit "Refresh Vibe" to retry.
+            Couldn't save the playlist this time — your vibe itself is safe. Try again in a moment.
           </div>
         )}
 

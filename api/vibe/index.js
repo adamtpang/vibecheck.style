@@ -1,11 +1,12 @@
 import { neon } from '@neondatabase/serverless';
 import { sanitizeVibePayload } from '../_lib/sanitize.js';
+import { requireOwnership } from '../_lib/spotify-auth.js';
 
 export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method !== 'POST') {
@@ -21,6 +22,11 @@ export default async function handler(req, res) {
   if (!spotify_id || !display_name) {
     return res.status(400).json({ error: 'spotify_id and display_name required' });
   }
+
+  // Only the owner may write their row. Without this, an anonymous caller could
+  // overwrite anyone's vibe or flip their privacy flag (POST is CORS *).
+  const denied = await requireOwnership(req, spotify_id);
+  if (denied) return res.status(denied.status).json({ error: denied.error });
 
   // is_public is optional on insert (column default applies). On update we
   // only overwrite when the client explicitly sends a boolean — that way a

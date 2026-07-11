@@ -39,37 +39,39 @@ export interface VibeSummary {
 }
 
 export async function saveVibe(data: VibeData): Promise<void> {
+  // POST is owner-gated server-side — hand over the Spotify token so the
+  // server can confirm this row is ours before writing it.
+  const token = localStorage.getItem('access_token');
+  if (!token) throw new Error('Not signed in');
   const res = await fetch(`${API_BASE}/api/vibe`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to save vibe');
 }
 
 /**
- * Updates only the is_public flag for the given user. Sends a minimal POST
- * that the upsert endpoint treats as a privacy-only change (server preserves
- * the rest). The server still requires display_name on the wire.
+ * Flips the is_public flag via the dedicated owner-gated PATCH endpoint.
+ * Touches only privacy — no full-row round-trip that could clobber vibe data.
  */
 export async function updatePrivacy(
   spotifyId: string,
-  displayName: string,
+  _displayName: string,
   isPublic: boolean
 ): Promise<void> {
-  // We have to send all NOT-NULL fields the upsert expects. Re-fetch the
-  // current row server-side would be cleaner; for v2.7 we just round-trip
-  // the existing record.
-  const current = await getVibe(spotifyId);
-  if (!current) throw new Error('No saved vibe to update');
-  const res = await fetch(`${API_BASE}/api/vibe`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...current,
-      display_name: current.display_name || displayName,
-      is_public: isPublic,
-    }),
+  const token = localStorage.getItem('access_token');
+  if (!token) throw new Error('Not signed in');
+  const res = await fetch(`${API_BASE}/api/vibe/${encodeURIComponent(spotifyId)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ is_public: isPublic }),
   });
   if (!res.ok) throw new Error('Failed to update privacy');
 }
