@@ -14,12 +14,20 @@
         "@neondatabase/serverless": "^1.0.2",
         "cors": "^2.8.5",
         "dotenv": "^16.3.1",
-        "express": "^4.18.2",
+        "express": "^4.22.3",
         "pg": "^8.13.0"
     },
     "devDependencies": {
         "concurrently": "^8.2.2",
         "nodemon": "^3.0.1"
+    },
+    "overrides": {
+        "brace-expansion": "1.1.20",
+        "lodash": "4.18.1",
+        "minimatch": "3.1.4",
+        "picomatch": "2.3.2",
+        "proxy-addr": "2.0.8",
+        "shell-quote": "1.11.0"
     },
     "keywords": [
         "spotify",
